@@ -101,7 +101,7 @@ applications/src/<app_name>/
 
 | 文件 | 作用 | 使用到的文件/资源 | 订阅/调用 | 发布/提供 |
 | ---- | ---- | ----------------- | --------- | --------- |
-| ★ `applications/src/hand_eye_calibration/hand_eye_calibration/node.py` | 标定主节点：运动、采集、时间戳对齐、写 YAML | `aruco.py`、`hand_eye.py`、`config/target_poses.yaml`、TF | `/camera/image_raw`、`/camera/camera_info`、`/arm_tcp_state` | `/target_pose` |
+| ★ `applications/src/hand_eye_calibration/hand_eye_calibration/node.py` | 标定主节点：运动、采集、时间戳对齐、写 YAML、结束回原位 | `aruco.py`、`hand_eye.py`、`config/target_poses.yaml`、TF | `/camera/image_raw`、`/camera/camera_info`、`/arm_tcp_state` | `/target_pose` |
 | `applications/src/hand_eye_calibration/hand_eye_calibration/aruco.py` | ArUco 检测 + PnP，输出 `T_cam_marker` | OpenCV、`hand_eye.make_transform` | — | — |
 | `applications/src/hand_eye_calibration/hand_eye_calibration/hand_eye.py` | 手眼数学：`look_at`、位姿变换、`solve_eye_in_hand`、一致性指标 | OpenCV、SciPy、NumPy | — | — |
 | `applications/src/hand_eye_calibration/hand_eye_calibration/__init__.py` | 包入口 | — | — | — |

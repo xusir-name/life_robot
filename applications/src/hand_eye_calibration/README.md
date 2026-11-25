@@ -12,7 +12,8 @@
 4. 检测 ArUco，估计 `T_cam_marker`；
 5. **按时间戳对齐**图像、`camera_info`、TCP 位姿；
 6. 收集 ≥ `min_samples` 个样本，用 `cv2.calibrateHandEye` 求 `T_tcp_cam`；
-7. 写出 YAML（含质量指标与样本明细）。
+7. 写出 YAML（含质量指标与样本明细）；
+8. 自动回到标定开始前的位姿（`restore_home`，默认开启）。
 
 输出约定：`parent_frame = tcp`，`child_frame = camera_optical_frame`，
 `transform_tcp_camera` 为 4×4 行主序矩阵。
@@ -59,6 +60,7 @@ ros2 launch hand_eye_calibration hand_eye_calibration.launch.py \
 | `max_time_diff_s` | `0.15` | 图像与 TCP 最大时间差 |
 | `settle_time_s` | `1.0` | 到位后稳定等待 |
 | `move_timeout_s` | `30.0` | 单次运动超时 |
+| `restore_home` | `true` | 标定结束/失败后回到开始位姿 |
 | `max_sample_error_m` | `0.005` | 单样本一致性阈值，超过则剔除离群 |
 | `max_sample_rotation_error_rad` | `0.03` | 单样本旋转一致性阈值 |
 
@@ -73,6 +75,11 @@ camera_positions:                # 相机光学系位置（m）
 
 相机姿态由 `look_at` 自动生成（z 指向目标，x 向右，y 向下）。
 需要显式姿态时可改用 `poses: [{position: [...], look_at: [...]}]`。
+
+## 回原位
+
+启动时记录 `base_frame -> motion_target_frame` 的位姿；标定成功、样本不足或异常退出时，
+在 `finally` 中自动发送该位姿回 `/target_pose`。设 `restore_home:=false` 可关闭。
 
 ## 时间戳对齐
 

@@ -28,6 +28,7 @@ def generate_launch_description():
             DeclareLaunchArgument("max_time_diff_s", default_value="0.15"),
             DeclareLaunchArgument("settle_time_s", default_value="1.0"),
             DeclareLaunchArgument("move_timeout_s", default_value="30.0"),
+            DeclareLaunchArgument("restore_home", default_value="true"),
             Node(
                 package="hand_eye_calibration",
                 executable="hand_eye_calibrator",
@@ -59,6 +60,9 @@ def generate_launch_description():
                         ),
                         "move_timeout_s": ParameterValue(
                             LaunchConfiguration("move_timeout_s"), value_type=float
+                        ),
+                        "restore_home": ParameterValue(
+                            LaunchConfiguration("restore_home"), value_type=bool
                         ),
                     }
                 ],

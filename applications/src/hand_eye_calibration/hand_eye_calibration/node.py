@@ -129,6 +129,9 @@ class HandEyeCalibrator(Node):
         self.max_outlier_removals = int(
             self.declare_parameter("max_outlier_removals", 3).value
         )
+        self.restore_home = bool(
+            self.declare_parameter("restore_home", True).value
+        )
 
         self.bridge = CvBridge()
         self.image: Optional[Image] = None
@@ -147,6 +150,8 @@ class HandEyeCalibrator(Node):
         self.motion_pub = self.create_publisher(PoseStamped, self.motion_topic, QOS)
 
         self.T_motion_cam: Optional[object] = None
+        self.T_base_motion_home: Optional[object] = None
+        self.moved = False
 
     # ------------------------------------------------------------------ callbacks
     def _on_image(self, msg: Image) -> None:
@@ -197,15 +202,28 @@ class HandEyeCalibrator(Node):
                     self.motion_target_frame, self.camera_frame, Time()
                 )
                 self.T_motion_cam = transform_to_matrix(tf)
-                self.get_logger().info(
-                    f"T_{self.motion_target_frame}_{self.camera_frame} = "
-                    f"{self.T_motion_cam.round(4).tolist()}"
-                )
-                return
+                break
             except Exception as exc:  # tf2 lookup can raise several types
                 last_error = exc
                 rclpy.spin_once(self, timeout_sec=0.2)
-        raise RuntimeError(f"TF lookup failed: {last_error}")
+        if self.T_motion_cam is None:
+            raise RuntimeError(f"TF lookup failed: {last_error}")
+
+        self.get_logger().info(
+            f"T_{self.motion_target_frame}_{self.camera_frame} = "
+            f"{self.T_motion_cam.round(4).tolist()}"
+        )
+        try:
+            home_tf = self.tf_buffer.lookup_transform(
+                self.base_frame, self.motion_target_frame, Time()
+            )
+            self.T_base_motion_home = transform_to_matrix(home_tf)
+            self.get_logger().info(
+                f"saved home pose {self.motion_target_frame}: "
+                f"p={self.T_base_motion_home[:3, 3].round(3).tolist()}"
+            )
+        except Exception as exc:
+            self.get_logger().warn(f"could not save home pose: {exc}")
 
     def _load_poses(self) -> list[dict]:
         if not self.poses_file:
@@ -249,9 +267,7 @@ class HandEyeCalibrator(Node):
         self.get_logger().info(f"loaded {len(poses)} target camera poses from {path}")
         return poses
 
-    def _move_to_camera_pose(self, camera_position, look_at_point) -> bool:
-        T_base_cam = look_at(camera_position, look_at_point)
-        T_base_motion = T_base_cam @ invert_transform(self.T_motion_cam)
+    def _send_motion_target(self, T_base_motion, label: str) -> bool:
         q = Rotation.from_matrix(T_base_motion[:3, :3]).as_quat()
         msg = PoseStamped()
         msg.header.frame_id = self.base_frame
@@ -266,10 +282,11 @@ class HandEyeCalibrator(Node):
 
         self.status = None
         self.get_logger().info(
-            f"move target {self.motion_target_frame}: "
-            f"p={T_base_motion[:3, 3].round(3).tolist()}"
+            f"{label}: p={T_base_motion[:3, 3].round(3).tolist()}"
         )
         self.motion_pub.publish(msg)
+        # The arm may move even if planning later fails; restore must be attempted.
+        self.moved = True
 
         ok = self._spin_until(
             lambda: self.status is not None
@@ -282,12 +299,33 @@ class HandEyeCalibrator(Node):
             self.move_timeout_s,
         )
         if not ok:
-            self.get_logger().error("motion timeout")
+            self.get_logger().error(f"{label}: motion timeout")
             return False
         if not self.status.startswith("succeeded"):
-            self.get_logger().error(f"motion failed: {self.status}")
+            self.get_logger().error(f"{label}: motion failed: {self.status}")
             return False
         return True
+
+    def _move_to_camera_pose(self, camera_position, look_at_point) -> bool:
+        T_base_cam = look_at(camera_position, look_at_point)
+        T_base_motion = T_base_cam @ invert_transform(self.T_motion_cam)
+        return self._send_motion_target(
+            T_base_motion, f"move target {self.motion_target_frame}"
+        )
+
+    def _restore_home(self) -> bool:
+        if not self.restore_home or not self.moved:
+            return True
+        if self.T_base_motion_home is None:
+            self.get_logger().warn("no saved home pose; cannot restore")
+            return False
+        self.get_logger().info("restoring original pose...")
+        ok = self._send_motion_target(self.T_base_motion_home, "restore home")
+        if ok:
+            self.get_logger().info("original pose restored")
+        else:
+            self.get_logger().warn("failed to restore original pose")
+        return ok
 
     def _wait_settle(self) -> bool:
         start = self.get_clock().now()
@@ -472,54 +510,65 @@ class HandEyeCalibrator(Node):
     # ------------------------------------------------------------------ run
     def run(self) -> int:
         self._wait_ready()
-        poses = self._load_poses()
-        samples: list[Sample] = []
-        for pose in poses:
-            if not self._move_to_camera_pose(pose["position"], pose["look_at"]):
-                self.get_logger().warn(f"skip pose {pose['index']}: motion failed")
-                continue
-            if not self._wait_settle():
-                self.get_logger().warn(f"skip pose {pose['index']}: not settled")
-                continue
-            sample = self._capture_sample(pose)
-            if sample is not None:
-                samples.append(sample)
+        self.moved = False
+        try:
+            poses = self._load_poses()
+            samples: list[Sample] = []
+            for pose in poses:
+                if not self._move_to_camera_pose(pose["position"], pose["look_at"]):
+                    self.get_logger().warn(f"skip pose {pose['index']}: motion failed")
+                    continue
+                if not self._wait_settle():
+                    self.get_logger().warn(f"skip pose {pose['index']}: not settled")
+                    continue
+                sample = self._capture_sample(pose)
+                if sample is not None:
+                    samples.append(sample)
 
-        self.get_logger().info(f"collected {len(samples)} valid samples")
-        if len(samples) < self.min_samples:
-            self.get_logger().error(
-                f"not enough samples: {len(samples)} < {self.min_samples}"
+            self.get_logger().info(f"collected {len(samples)} valid samples")
+            if len(samples) < self.min_samples:
+                self.get_logger().error(
+                    f"not enough samples: {len(samples)} < {self.min_samples}"
+                )
+                return 1
+            if len(samples) < 3:
+                self.get_logger().error("hand-eye calibration needs at least 3 samples")
+                return 1
+
+            result, used_samples, removed = self._solve_robust(samples)
+            metrics = result.metrics
+            self.get_logger().info(
+                "T_tcp_cam translation=%s quat_xyzw=%s"
+                % (
+                    result.T_tcp_cam[:3, 3].round(5).tolist(),
+                    Rotation.from_matrix(result.T_tcp_cam[:3, :3])
+                    .as_quat()
+                    .round(5)
+                    .tolist(),
+                )
             )
-            return 1
-        if len(samples) < 3:
-            self.get_logger().error("hand-eye calibration needs at least 3 samples")
-            return 1
+            self.get_logger().info(f"metrics: {metrics}")
 
-        result, used_samples, removed = self._solve_robust(samples)
-        metrics = result.metrics
-        self.get_logger().info(
-            "T_tcp_cam translation=%s quat_xyzw=%s"
-            % (
-                result.T_tcp_cam[:3, 3].round(5).tolist(),
-                Rotation.from_matrix(result.T_tcp_cam[:3, :3]).as_quat().round(5).tolist(),
+            quality_ok = (
+                metrics["marker_position_std_m"] <= self.max_consistency_translation_std_m
+                and metrics["marker_rotation_max_error_rad"]
+                <= self.max_consistency_rotation_rad
             )
-        )
-        self.get_logger().info(f"metrics: {metrics}")
+            if not quality_ok:
+                self.get_logger().warn(
+                    "calibration consistency is poor; "
+                    "check marker visibility / timestamp alignment"
+                )
 
-        quality_ok = (
-            metrics["marker_position_std_m"] <= self.max_consistency_translation_std_m
-            and metrics["marker_rotation_max_error_rad"] <= self.max_consistency_rotation_rad
-        )
-        if not quality_ok:
-            self.get_logger().warn(
-                "calibration consistency is poor; check marker visibility / timestamp alignment"
+            path = self._write_yaml(result, used_samples, poses, removed)
+            self.get_logger().info(
+                f"wrote {path} ({len(used_samples)} samples, "
+                f"{len(removed)} outliers removed)"
             )
-
-        path = self._write_yaml(result, used_samples, poses, removed)
-        self.get_logger().info(
-            f"wrote {path} ({len(used_samples)} samples, {len(removed)} outliers removed)"
-        )
-        return 0
+            return 0
+        finally:
+            if self.restore_home and self.moved:
+                self._restore_home()
 
 
 def main(args=None) -> None:

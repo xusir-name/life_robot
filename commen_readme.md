@@ -267,3 +267,4 @@ cd /home/xu/life_robot/drivers/agx_arm_ws && colcon build --symlink-install && s
 | 2026-11-25 | 新增参数化规则 | 可配置项必须参数化，节点声明默认值，`*.launch.py` 统一赋值 |
 | 2026-11-25 | 新增 Git 提交规则 | 每次 AI 修改完成后必须提交，提交前同步文档/索引/台账 |
 | 2026-11-25 | 新增手眼标定应用 | `applications/src/hand_eye_calibration`，ArUco + PnP + 时间戳对齐 + YAML |
+| 2026-11-25 | 标定结束回原位 | 启动记录初始位姿，成功/失败/异常退出均自动恢复 |
