@@ -31,7 +31,7 @@
 
 ## 不做
 
-- ❌ 感知/决策/运动/协议/驱动实现。
+- ❌ 不重复实现下层通用能力；标定/调试类专用算法可在应用包内以**纯函数**存在，且必须可单测。
 - ❌ 发 `/control/*`、直接控制硬件。
 - ❌ 定义 msg/srv/action（→ `interfaces/`）。
 - ❌ 放可复用库/工具/公共组件（下沉到对应层或独立库）。
@@ -57,12 +57,15 @@ applications/src/<app_name>/
 └── test/
 ```
 
+当前包：`hand_eye_calibration`（眼在手上标定，见其 `README.md`）。
+
 - 一应用一包；包名场景语义：`pick_place_app`、`teleop_app`。
 - 通用逻辑下沉；应用级 launch 不承担全系统 bringup。
 
 ## 约束
 
-- 需要新能力 → 加到对应层并暴露接口，不在应用里临时实现。
+- 需要新能力 → 加到对应层并暴露接口，不在应用里临时实现（专用标定/调试算法除外，见上）。
+- 标定/调试类应用可在 `MANUAL`/离线模式调用运动接口（如 `/target_pose`），但**不得发 `/control/*`**；正式运行应经 L6 action。
 - SIGINT/SIGTERM 优雅取消任务后退出；启动检查依赖就绪。
 - action 异步调用，不阻塞 UI 主循环；高频展示限流。
 - 危险动作二次确认；`ESTOP/FAULT` 禁用运动入口；取消展示真实 `CANCELED`。
@@ -73,7 +76,7 @@ applications/src/<app_name>/
 - [ ] 一条命令启动并完成完整流程
 - [ ] 取消/退出后无残留任务/线程/连接
 - [ ] 不发 `/control/*`、不直接访问硬件
-- [ ] 不含感知/决策/运动/协议实现，不复制下层代码
+- [ ] 不含下层通用能力的重复实现；标定专用算法已隔离且可单测
 - [ ] 无公共库留在应用包内
 - [ ] 参数外置；模式行为正确
 - [ ] 更新本文件索引与 L7 文档
@@ -94,8 +97,14 @@ applications/src/<app_name>/
 
 ## 代码文件索引
 
-> 当前无手写代码。新增应用包后必须在下表登记；路径相对仓库根目录。
+> 路径相对仓库根目录；新增/删除/重命名文件、改变引用或话题时同步。
 
 | 文件 | 作用 | 使用到的文件/资源 | 订阅/调用 | 发布/提供 |
 | ---- | ---- | ----------------- | --------- | --------- |
-| _（暂无）_ | — | — | — | — |
+| ★ `applications/src/hand_eye_calibration/hand_eye_calibration/node.py` | 标定主节点：运动、采集、时间戳对齐、写 YAML | `aruco.py`、`hand_eye.py`、`config/target_poses.yaml`、TF | `/camera/image_raw`、`/camera/camera_info`、`/arm_tcp_state` | `/target_pose` |
+| `applications/src/hand_eye_calibration/hand_eye_calibration/aruco.py` | ArUco 检测 + PnP，输出 `T_cam_marker` | OpenCV、`hand_eye.make_transform` | — | — |
+| `applications/src/hand_eye_calibration/hand_eye_calibration/hand_eye.py` | 手眼数学：`look_at`、位姿变换、`solve_eye_in_hand`、一致性指标 | OpenCV、SciPy、NumPy | — | — |
+| `applications/src/hand_eye_calibration/hand_eye_calibration/__init__.py` | 包入口 | — | — | — |
+| `applications/src/hand_eye_calibration/config/target_poses.yaml` | 相机目标位姿与 `look_at` | — | — | — |
+| `applications/src/hand_eye_calibration/launch/hand_eye_calibration.launch.py` | 标定启动入口 | `config/target_poses.yaml`、节点参数 | — | 启动节点 |
+| `applications/src/hand_eye_calibration/test/test_hand_eye.py` | 合成数据验证手眼求解 | `hand_eye.py` | — | — |

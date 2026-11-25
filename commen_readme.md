@@ -234,6 +234,7 @@ cd /home/xu/life_robot/drivers/agx_arm_ws && colcon build --symlink-install && s
 ### 6.1 已完成
 
 - 驱动接入（AgileX ROS2，CAN/URDF/MoveIt/夹爪/灵巧手）。
+- L7 标定应用：`applications/src/hand_eye_calibration` 已实现眼在手上标定（ArUco + PnP + 时间戳对齐 + YAML 输出），仿真验证通过。
 - 架构、约定、流程、L0–L8 分层文档、各目录 README 与代码索引规则。
 - 依赖台账（含已安装/待安装状态与命令）。
 
@@ -250,7 +251,7 @@ cd /home/xu/life_robot/drivers/agx_arm_ws && colcon build --symlink-install && s
 ### 6.3 待确认（未定前不扩写实现）
 
 - [ ] 是否含移动底盘？导航归 L6 还是独立 `navigation/`。
-- [ ] 相机型号/安装方式（眼在手上/手在眼外）与手眼标定。
+- [ ] 真实相机型号/安装方式与手眼标定（仿真已跑通眼在手上流程，输出 `config/calibration/hand_eye_calibration.yaml`）。
 - [ ] 是否引入 L4，或先由 L5 直连 L3。
 - [ ] 单臂/双臂、单机/多机、ROS 2 Humble 是否唯一基线。
 
@@ -265,3 +266,4 @@ cd /home/xu/life_robot/drivers/agx_arm_ws && colcon build --symlink-install && s
 | 2026-11-25 | 文档整体收敛 | 精简重复内容，加入 AI 自循环协议，统一索引与模板 |
 | 2026-11-25 | 新增参数化规则 | 可配置项必须参数化，节点声明默认值，`*.launch.py` 统一赋值 |
 | 2026-11-25 | 新增 Git 提交规则 | 每次 AI 修改完成后必须提交，提交前同步文档/索引/台账 |
+| 2026-11-25 | 新增手眼标定应用 | `applications/src/hand_eye_calibration`，ArUco + PnP + 时间戳对齐 + YAML |

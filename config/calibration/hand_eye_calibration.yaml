@@ -1,0 +1,262 @@
+hand_eye_calibration:
+  type: eye_in_hand
+  parent_frame: tcp
+  child_frame: camera_optical_frame
+  method: TSAI
+  samples: 8
+  translation_m:
+  - -0.07121283065234099
+  - -0.011706565292667798
+  - -0.10090893855455113
+  rotation_quaternion_xyzw:
+  - 0.12221703831483674
+  - -0.12265875960574957
+  - 0.6970903231495534
+  - -0.695760666902621
+  rotation_matrix:
+  - - -0.0019601798735398024
+    - 0.9400340756070212
+    - 0.341074910236031
+  - - -0.9999980368965662
+    - -0.0017438461663981109
+    - -0.000940852571802749
+  - - -0.00028965130294737046
+    - -0.3410760849109787
+    - 0.9400356484750574
+  transform_tcp_camera:
+  - - -0.0019601798735398024
+    - 0.9400340756070212
+    - 0.341074910236031
+    - -0.07121283065234099
+  - - -0.9999980368965662
+    - -0.0017438461663981109
+    - -0.000940852571802749
+    - -0.011706565292667798
+  - - -0.00028965130294737046
+    - -0.3410760849109787
+    - 0.9400356484750574
+    - -0.10090893855455113
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 1.0
+  inverse_transform_camera_tcp:
+  - - -0.0019601798735398024
+    - -0.9999980368965662
+    - -0.00028965130294737046
+    - -0.011875360674383153
+  - - 0.9400340756070212
+    - -0.0017438461663981109
+    - -0.3410760849109787
+    - 0.03250444728991658
+  - - 0.341074910236031
+    - -0.000940852571802749
+    - 0.9400356484750574
+    - 0.11913589516139549
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 1.0
+  metrics:
+    marker_position_mean_m:
+    - 0.4474964208143924
+    - 0.0004910095769476578
+    - 0.1303828510142097
+    marker_position_std_m: 6.733732676869535e-05
+    marker_position_max_error_m: 0.0005282272299741915
+    marker_rotation_max_error_rad: 0.006566896509361336
+    sample_position_errors_m:
+    - 0.0003425367500363417
+    - 0.0003308932758708487
+    - 0.00036951997785539606
+    - 0.0004000292953119674
+    - 0.00030384809329882435
+    - 0.00042071345222821394
+    - 0.0005282272299741915
+    - 0.00044069297887961215
+    sample_rotation_errors_rad:
+    - 0.0
+    - 0.004365758372559855
+    - 0.0033864866170548614
+    - 0.003934788626674413
+    - 0.004028126611149249
+    - 0.005278817266164018
+    - 0.006566896509361336
+    - 0.004230884269354148
+    stamp_diff_max_s: 0.081
+    reproj_error_mean_px: 0.13957541659131256
+    reproj_error_max_px: 0.2278374853785619
+    tcp_translation_span_m: 0.11438011794308059
+    tcp_rotation_span_rad: 0.38590946764095424
+    tcp_position_span_m:
+    - 0.04080373098832435
+    - 0.10636824710217663
+    - 0.05400476966674733
+  created_at: '2026-11-25T10:14:35.595295+00:00'
+  source:
+    base_frame: base_link
+    motion_target_frame: link6
+    image_topic: /camera/image_raw
+    camera_info_topic: /camera/camera_info
+    tcp_topic: /arm_tcp_state
+    motion_topic: /target_pose
+    poses_file: /home/xu/life_robot/applications/install/hand_eye_calibration/share/hand_eye_calibration/config/target_poses.yaml
+    marker_dictionary: DICT_6X6_250
+    marker_id: 0
+    marker_size_m: 0.16
+  samples_detail:
+  - index: 0
+    camera_position_m:
+    - 0.12
+    - 0.0
+    - 0.34
+    image_stamp_s: 1201.64
+    tcp_stamp_s: 1201.593
+    stamp_diff_s: 0.047
+    reproj_error_px: 0.07047107237280971
+    tcp_position_m:
+    - 0.20170972726311423
+    - 0.002440772344881161
+    - 0.25286181355378645
+    tcp_quaternion_xyzw:
+    - 0.021261043285061978
+    - 0.7582537738287959
+    - -0.019884479285135037
+    - 0.6513092890450581
+    note: variant=upscale
+  - index: 1
+    camera_position_m:
+    - 0.14
+    - 0.0
+    - 0.36
+    image_stamp_s: 1203.974
+    tcp_stamp_s: 1203.893
+    stamp_diff_s: 0.081
+    reproj_error_px: 0.20623974003035161
+    tcp_position_m:
+    - 0.21056750492548953
+    - 0.0011821345396484367
+    - 0.2474538476807953
+    tcp_quaternion_xyzw:
+    - 0.060106335015268346
+    - 0.8283913130732597
+    - -0.007922510791052358
+    - 0.5568593132367983
+    note: variant=upscale
+  - index: 2
+    camera_position_m:
+    - 0.16
+    - 0.0
+    - 0.38
+    image_stamp_s: 1206.306
+    tcp_stamp_s: 1206.293
+    stamp_diff_s: 0.013000000000000001
+    reproj_error_px: 0.15349042943634636
+    tcp_position_m:
+    - 0.22967636775320677
+    - 0.014551506703210086
+    - 0.27949878341479956
+    tcp_quaternion_xyzw:
+    - -0.03790252158051146
+    - 0.8230758359668117
+    - 0.007109713919677526
+    - 0.566620701239686
+    note: variant=upscale
+  - index: 3
+    camera_position_m:
+    - 0.14
+    - -0.06
+    - 0.36
+    image_stamp_s: 1209.573
+    tcp_stamp_s: 1209.493
+    stamp_diff_s: 0.08
+    reproj_error_px: 0.07124298502894327
+    tcp_position_m:
+    - 0.21280120310405234
+    - -0.038630410418558365
+    - 0.2726578462315783
+    tcp_quaternion_xyzw:
+    - -0.01622963102411847
+    - 0.7847684805328683
+    - 0.062006498417623124
+    - 0.6164659156781821
+    note: variant=upscale
+  - index: 4
+    camera_position_m:
+    - 0.14
+    - 0.06
+    - 0.36
+    image_stamp_s: 1213.708
+    tcp_stamp_s: 1213.693
+    stamp_diff_s: 0.015000000000000001
+    reproj_error_px: 0.07905608749745598
+    tcp_position_m:
+    - 0.2125211434167381
+    - 0.06323776280358316
+    - 0.2582447487239253
+    tcp_quaternion_xyzw:
+    - 0.08866462973796882
+    - 0.8067236933996625
+    - -0.012144574976636797
+    - 0.5841129815709225
+    note: variant=upscale
+  - index: 5
+    camera_position_m:
+    - 0.16
+    - 0.08
+    - 0.34
+    image_stamp_s: 1215.773
+    tcp_stamp_s: 1215.693
+    stamp_diff_s: 0.08
+    reproj_error_px: 0.1775268169677522
+    tcp_position_m:
+    - 0.23756294984352083
+    - 0.06773783668361827
+    - 0.23903936503075907
+    tcp_quaternion_xyzw:
+    - 0.13890095506415748
+    - 0.7936907815815584
+    - -0.04882225284246333
+    - 0.5902354238285829
+    note: variant=upscale
+  - index: 6
+    camera_position_m:
+    - 0.12
+    - -0.04
+    - 0.38
+    image_stamp_s: 1219.773
+    tcp_stamp_s: 1219.693
+    stamp_diff_s: 0.08
+    reproj_error_px: 0.2278374853785619
+    tcp_position_m:
+    - 0.19675921885519648
+    - -0.028621572504221912
+    - 0.2852208675948362
+    tcp_quaternion_xyzw:
+    - -0.020869078374796533
+    - 0.8030714896148174
+    - 0.0014086492266806615
+    - 0.5955154740583835
+    note: variant=upscale
+  - index: 7
+    camera_position_m:
+    - 0.12
+    - 0.04
+    - 0.38
+    image_stamp_s: 1223.707
+    tcp_stamp_s: 1223.693
+    stamp_diff_s: 0.014
+    reproj_error_px: 0.13073871601827947
+    tcp_position_m:
+    - 0.20148962166575798
+    - 0.05263028668219604
+    - 0.2930441346975064
+    tcp_quaternion_xyzw:
+    - 0.03999833652407003
+    - 0.7786939940960337
+    - 0.006346383620053516
+    - 0.6260954560201029
+    note: variant=upscale
+  pose_count: 8
+  removed_outliers: 0
+  removed_outlier_positions_m: []

@@ -44,6 +44,9 @@
 | `ros-humble-xacro` | 2.1.1 | URDF/xacro | `sudo apt install -y ros-humble-xacro` | ✅ |
 | `ros-humble-joint-state-publisher` | 2.4.0 | 关节状态发布 | `sudo apt install -y ros-humble-joint-state-publisher` | ✅ |
 | `ros-humble-robot-state-publisher` | 3.0.3 | TF/机器人模型 | `sudo apt install -y ros-humble-robot-state-publisher` | ✅ |
+| `ros-humble-cv-bridge` | 3.2.1 | ROS Image ↔ OpenCV | `sudo apt install -y ros-humble-cv-bridge` | ✅ |
+| `python3-opencv` | 4.5.4 | ArUco 检测 / PnP / 手眼标定 | `sudo apt install -y python3-opencv` | ✅ |
+| `python3-yaml` | 5.4.1 | 标定位姿/外参 YAML 读写 | `sudo apt install -y python3-yaml` | ✅ |
 | `ros-humble-moveit` | — | MoveIt2（L6 可选） | `sudo apt install -y ros-humble-moveit` | ⬜ 用 MoveIt 时 |
 | `ros-humble-ros2-control` | — | MoveIt/控制器依赖 | `sudo apt install -y ros-humble-ros2-control` | ⬜ 用 MoveIt 时 |
 | `ros-humble-ros2-controllers` | — | 控制器实现 | `sudo apt install -y ros-humble-ros2-controllers` | ⬜ 用 MoveIt 时 |
@@ -117,4 +120,5 @@
 | 日期 | 变更 | 说明 |
 | ---- | ---- | ---- |
 | 2026-11-25 | 建立台账 | 记录环境、依赖、源码、命令与记录规则 |
+| 2026-11-25 | 补手眼标定依赖 | `cv_bridge`、`python3-opencv`、`python3-yaml` |
 | 2026-11-25 | 精简 | 去重、压缩表格，规则收敛到 §1 |
