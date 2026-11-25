@@ -12,7 +12,7 @@
 4. 检测 ArUco，估计 `T_cam_marker`；
 5. **按时间戳对齐**图像、`camera_info`、TCP 位姿；
 6. 收集 ≥ `min_samples` 个样本，用 `cv2.calibrateHandEye` 求 `T_tcp_cam`；
-7. 写出 YAML（含质量指标与样本明细）；
+7. 写出**完整 YAML**（质量指标/样本明细）和**纯外参 YAML**；
 8. 自动回到标定开始前的位姿（`restore_home`，默认开启）。
 
 输出约定：`parent_frame = tcp`，`child_frame = camera_optical_frame`，
@@ -30,6 +30,20 @@
 
 TF：需要 `motion_target_frame (link6) -> camera_optical_frame` 的静态变换。
 
+所有话题/坐标系名都可以在 launch 里覆盖：
+
+| launch 参数 | 默认 |
+| ----------- | ---- |
+| `base_frame` | `base_link` |
+| `camera_frame` | `camera_optical_frame` |
+| `tcp_frame` | `tcp` |
+| `motion_target_frame` | `link6` |
+| `image_topic` | `/camera/image_raw` |
+| `camera_info_topic` | `/camera/camera_info` |
+| `tcp_topic` | `/arm_tcp_state` |
+| `motion_topic` | `/target_pose` |
+| `motion_status_topic` | `/target_pose_status` |
+
 > 本包在 `MANUAL/离线标定` 场景使用 `/target_pose`；正式运行时运动必须经 L6，
 > 且本包**不发布 `/control/*`**。
 
@@ -43,7 +57,8 @@ colcon build --packages-select hand_eye_calibration --symlink-install
 source install/setup.bash
 
 ros2 launch hand_eye_calibration hand_eye_calibration.launch.py \
-  output_yaml:=$HOME/life_robot/config/calibration/hand_eye_calibration.yaml
+  output_yaml:=$HOME/life_robot/config/calibration/hand_eye_calibration.yaml \
+  extrinsics_yaml:=$HOME/life_robot/config/calibration/camera_tcp_extrinsics.yaml
 ```
 
 常用参数：
@@ -51,7 +66,8 @@ ros2 launch hand_eye_calibration hand_eye_calibration.launch.py \
 | 参数 | 默认 | 说明 |
 | ---- | ---- | ---- |
 | `poses_file` | 包内 `config/target_poses.yaml` | 相机位姿 + look_at |
-| `output_yaml` | `~/life_robot/config/calibration/hand_eye_calibration.yaml` | 输出 |
+| `output_yaml` | `~/life_robot/config/calibration/hand_eye_calibration.yaml` | 完整标定报告 |
+| `extrinsics_yaml` | `~/life_robot/config/calibration/camera_tcp_extrinsics.yaml` | 纯外参文件 |
 | `marker_dict` | `DICT_6X6_250` | ArUco 字典 |
 | `marker_id` | `0` | 码 ID |
 | `marker_size_m` | `0.16` | 码边长 |
@@ -75,6 +91,21 @@ camera_positions:                # 相机光学系位置（m）
 
 相机姿态由 `look_at` 自动生成（z 指向目标，x 向右，y 向下）。
 需要显式姿态时可改用 `poses: [{position: [...], look_at: [...]}]`。
+
+## 两个输出文件
+
+**完整报告** `hand_eye_calibration.yaml`：外参 + 质量指标 + 样本明细 + 来源信息。
+
+**纯外参** `camera_tcp_extrinsics.yaml`：只保留可直接使用的变换，无指标/样本：
+
+```yaml
+parent_frame: tcp
+child_frame: camera_optical_frame
+translation_m: [-0.0713, -0.0122, -0.0979]
+rotation_quaternion_xyzw: [-0.1232, 0.1232, -0.6957, 0.6969]
+rotation_matrix: [[...]]
+transform: [[...]]        # 4x4, p_tcp = T * p_cam
+```
 
 ## 回原位
 

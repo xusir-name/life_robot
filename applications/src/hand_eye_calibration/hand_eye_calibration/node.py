@@ -102,6 +102,12 @@ class HandEyeCalibrator(Node):
                 "~/life_robot/config/calibration/hand_eye_calibration.yaml"
             ),
         ).value
+        self.extrinsics_yaml = self.declare_parameter(
+            "extrinsics_yaml",
+            os.path.expanduser(
+                "~/life_robot/config/calibration/camera_tcp_extrinsics.yaml"
+            ),
+        ).value
         self.settle_time_s = float(self.declare_parameter("settle_time_s", 1.0).value)
         self.move_timeout_s = float(self.declare_parameter("move_timeout_s", 30.0).value)
         self.capture_timeout_s = float(self.declare_parameter("capture_timeout_s", 6.0).value)
@@ -457,6 +463,24 @@ class HandEyeCalibrator(Node):
             result = solve_eye_in_hand(working, method=self.hand_eye_method)
         return result, working, removed
 
+    def _write_extrinsics(self, result) -> str:
+        T = result.T_tcp_cam
+        data = {
+            "parent_frame": self.tcp_frame,
+            "child_frame": self.camera_frame,
+            "translation_m": T[:3, 3].tolist(),
+            "rotation_quaternion_xyzw": Rotation.from_matrix(T[:3, :3])
+            .as_quat()
+            .tolist(),
+            "rotation_matrix": T[:3, :3].tolist(),
+            "transform": T.tolist(),
+        }
+        path = os.path.expanduser(self.extrinsics_yaml)
+        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            yaml.safe_dump(data, f, sort_keys=False, allow_unicode=True)
+        return path
+
     def _write_yaml(self, result, samples: list[Sample], poses: list[dict], removed=None) -> str:
         data = result.as_dict()
         data["parent_frame"] = self.tcp_frame
@@ -561,10 +585,12 @@ class HandEyeCalibrator(Node):
                 )
 
             path = self._write_yaml(result, used_samples, poses, removed)
+            extrinsics_path = self._write_extrinsics(result)
             self.get_logger().info(
                 f"wrote {path} ({len(used_samples)} samples, "
                 f"{len(removed)} outliers removed)"
             )
+            self.get_logger().info(f"wrote clean extrinsics: {extrinsics_path}")
             return 0
         finally:
             if self.restore_home and self.moved:

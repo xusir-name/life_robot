@@ -268,3 +268,4 @@ cd /home/xu/life_robot/drivers/agx_arm_ws && colcon build --symlink-install && s
 | 2026-11-25 | 新增 Git 提交规则 | 每次 AI 修改完成后必须提交，提交前同步文档/索引/台账 |
 | 2026-11-25 | 新增手眼标定应用 | `applications/src/hand_eye_calibration`，ArUco + PnP + 时间戳对齐 + YAML |
 | 2026-11-25 | 标定结束回原位 | 启动记录初始位姿，成功/失败/异常退出均自动恢复 |
+| 2026-11-25 | 标定话题可配置 + 纯外参输出 | launch 可改全部话题/坐标系名；额外生成 `camera_tcp_extrinsics.yaml` |
