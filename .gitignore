@@ -1,0 +1,29 @@
+# 构建产物
+build/
+install/
+log/
+
+# 第三方驱动工作区（自带 .git，独立仓库；来源/版本见 drivers/readme.md 与 readme.md）
+drivers/agx_arm_ws/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# 编辑器 / 系统
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# 大文件 / 数据
+*.bag
+*.db3
+*.mcap
+*.onnx
+*.pt
+*.pth
+*.ckpt
