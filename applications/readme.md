@@ -60,9 +60,10 @@ applications/src/<app_name>/
 当前包：
 
 - `hand_eye_calibration`：眼在手上标定（见其 `README.md`）。
-- `graspnet_pick`：仿真抓取闭环（RGB-D 框 → 最高分抓取 → 服务触发抓取），
+- `graspnet_pick`：C++ 仿真抓取闭环（RGB-D 框 → 最高分抓取 → 服务触发抓取），
   两个节点 `grasp_estimator` / `grasp_executor`；算法为应用内纯函数，迁移目标见其 `README.md`。
 
+- 语言按应用选择：Python 用上面的 `main.py/app.py` 布局；C++ 用 `src/*.cpp` + `include/<pkg>/*.hpp` + `CMakeLists.txt`（见 `graspnet_pick`）。
 - 一应用一包；包名场景语义：`pick_place_app`、`teleop_app`。
 - 通用逻辑下沉；应用级 launch 不承担全系统 bringup。
 
@@ -114,11 +115,18 @@ applications/src/<app_name>/
 | `applications/src/hand_eye_calibration/config/target_poses.yaml` | 相机目标位姿与 `look_at` | — | — | — |
 | `applications/src/hand_eye_calibration/launch/hand_eye_calibration.launch.py` | 标定启动入口 | `config/target_poses.yaml`、节点参数 | — | 启动节点 |
 | `applications/src/hand_eye_calibration/test/test_hand_eye.py` | 合成数据验证手眼求解 | `hand_eye.py` | — | — |
-| ★ `applications/src/graspnet_pick/graspnet_pick/estimator_node.py` | 框内抓取估计：RGB-D → 点云 → 最高分候选 | `geometry.py`、`transforms.py`、TF | `/camera/image_raw`、`/camera/depth/image_raw`、`/camera/camera_info`、`/grasp/target_box` | `/grasp/best_grasp`、`/grasp/best_pose` |
-| ★ `applications/src/graspnet_pick/graspnet_pick/executor_node.py` | 服务触发抓取：手眼变换、候选朝向重试、开/闭爪、抬起 | `transforms.py`、`interfaces`、TF | `/grasp/best_grasp`、`/arm_tcp_state`、`/target_pose_status`、`/joint_states`、`/grasp/execute` | `/target_pose`、`/gripper_controller/joint_trajectory` |
-| `applications/src/graspnet_pick/graspnet_pick/geometry.py` | 纯函数：反投影、去平面、聚类、OBB、抓取采样/评分/NMS | NumPy、SciPy | — | — |
-| `applications/src/graspnet_pick/graspnet_pick/transforms.py` | 刚体变换、四元数、标定 YAML 读取 | NumPy、SciPy、YAML | — | — |
+| ★ `applications/src/graspnet_pick/src/estimator_node.cpp` | 框内抓取估计：RGB-D → 点云 → 最高分候选 | `geometry.cpp`、`transforms.cpp`、TF | `/camera/image_raw`、`/camera/depth/image_raw`、`/camera/camera_info`、`/grasp/target_box` | `/grasp/best_grasp`、`/grasp/best_pose` |
+| ★ `applications/src/graspnet_pick/src/executor_node.cpp` | 服务触发抓取：手眼变换、候选朝向重试、开/闭爪、抬起 | `transforms.cpp`、`interfaces`、TF | `/grasp/best_grasp`、`/arm_tcp_state`、`/target_pose_status`、`/joint_states`、`/grasp/execute` | `/target_pose`、`/gripper_controller/joint_trajectory` |
+| `applications/src/graspnet_pick/src/grasp_estimator_main.cpp` | 估计节点 main | `estimator_node.cpp` | — | — |
+| `applications/src/graspnet_pick/src/grasp_executor_main.cpp` | 执行节点 main（多线程执行器） | `executor_node.cpp` | — | — |
+| `applications/src/graspnet_pick/src/geometry.cpp` | 纯函数：反投影、去平面、聚类、OBB、抓取采样/评分/NMS | Eigen、OpenCV | — | — |
+| `applications/src/graspnet_pick/src/transforms.cpp` | 刚体变换、四元数、标定 YAML 读取 | Eigen、yaml-cpp | — | — |
+| `applications/src/graspnet_pick/include/graspnet_pick/geometry.hpp` | 点云/抓取算法接口 | `geometry.cpp` | — | — |
+| `applications/src/graspnet_pick/include/graspnet_pick/transforms.hpp` | 刚体变换/标定接口 | `transforms.cpp` | — | — |
+| `applications/src/graspnet_pick/include/graspnet_pick/estimator_node.hpp` | 估计节点声明 | `estimator_node.cpp` | — | — |
+| `applications/src/graspnet_pick/include/graspnet_pick/executor_node.hpp` | 执行节点声明 | `executor_node.cpp` | — | — |
+| `applications/src/graspnet_pick/CMakeLists.txt` | ament_cmake 构建：核心库、两个节点、gtest | `package.xml` | — | — |
 | `applications/src/graspnet_pick/launch/graspnet_pick.launch.py` | 估计 + 执行启动入口，集中赋值参数 | 节点参数、标定 YAML | — | 启动两个节点 |
 | `applications/src/graspnet_pick/test/sim_move_to_view.py` | 仿真辅助：相机观察位姿 → `/target_pose` | TF、MoveIt 桥 | — | `/target_pose`（测试） |
 | `applications/src/graspnet_pick/test/sim_color_box_publisher.py` | 仿真辅助：颜色阈值代替 YOLO 发框 | OpenCV | `/camera/image_raw` | `/grasp/target_box`（测试） |
-| `applications/src/graspnet_pick/test/test_geometry.py` | 抓取几何/变换单测 | `geometry.py`、`transforms.py` | — | — |
+| `applications/src/graspnet_pick/test/test_geometry.cpp` | C++ gtest：几何/变换 | `geometry.cpp`、`transforms.cpp` | — | — |

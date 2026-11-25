@@ -235,7 +235,7 @@ cd /home/xu/life_robot/drivers/agx_arm_ws && colcon build --symlink-install && s
 
 - 驱动接入（AgileX ROS2，CAN/URDF/MoveIt/夹爪/灵巧手）。
 - L7 标定应用：`applications/src/hand_eye_calibration` 已实现眼在手上标定（ArUco + PnP + 时间戳对齐 + YAML 输出），仿真验证通过。
-- L7 仿真抓取应用：`applications/src/graspnet_pick` 已实现“图像框 → 最高分抓取 → 服务触发抓取”，
+- L7 仿真抓取应用（C++）：`applications/src/graspnet_pick` 已实现“图像框 → 最高分抓取 → 服务触发抓取”，
   手眼外参读取/时间戳对齐/候选朝向重试/夹空检测；估计→服务→运动→夹爪→夹空检测链路已在
   Gazebo + MoveIt 跑通，抓取接触点参数仍需按夹爪模型/实物继续整定。
 - 架构、约定、流程、L0–L8 分层文档、各目录 README 与代码索引规则。
@@ -272,4 +272,4 @@ cd /home/xu/life_robot/drivers/agx_arm_ws && colcon build --symlink-install && s
 | 2026-11-25 | 新增手眼标定应用 | `applications/src/hand_eye_calibration`，ArUco + PnP + 时间戳对齐 + YAML |
 | 2026-11-25 | 标定结束回原位 | 启动记录初始位姿，成功/失败/异常退出均自动恢复 |
 | 2026-11-25 | 标定话题可配置 + 纯外参输出 | launch 可改全部话题/坐标系名；额外生成 `camera_tcp_extrinsics.yaml` |
-| 2026-11-25 | 新增仿真抓取应用 | `graspnet_pick`：GraspCandidate/ExecuteGrasp 接口、服务触发抓取、手眼与候选朝向重试、夹空检测 |
+| 2026-11-25 | 新增仿真抓取应用（C++） | `graspnet_pick`：GraspCandidate/ExecuteGrasp 接口、服务触发抓取、手眼与候选朝向重试、夹空检测 |

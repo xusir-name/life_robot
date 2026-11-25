@@ -18,10 +18,12 @@ RGB-D + 目标框 → 抓取候选（最高分） → GraspCandidate 话题
 ```
 
 - **一个框一个目标**：框由 YOLO/OBB/人工给出，本包不做检测。
-- **GraspNet 后端**：当前是几何后端（平面去除 + 聚类 + 桌面约束 OBB + 力闭合候选），
+- **GraspNet 后端**：当前是 C++ 几何后端（平面去除 + 聚类 + 桌面约束 OBB + 力闭合候选），
   输出 GraspNet 风格的 6-DoF 抓取（`z=approach`、`y=闭合轴`、`x=y×z`）。
   官方 GraspNet 网络需要 `checkpoint-rs.tar` / `pointnet2_ops` / CUDA 工具链，
   本机暂不具备；`backend` 参数保留为后续替换点。
+- **纯 C++ 实现**：Eigen（线性代数）、OpenCV（图像/轮廓）、yaml-cpp（标定外参），
+  核心算法集中在 `geometry.cpp` / `transforms.cpp`，可被 gtest 单测。
 - **手眼外参**：执行节点启动时读取标定 YAML，用 **图像时间戳对应的 TCP** 做变换，
   避免“检测后机械臂动过”导致外参错位。
 
@@ -65,7 +67,7 @@ T_base_ee_target  = T_base_tcp_target · inv(T_ee_tcp)
 ## 运行（仿真）
 
 ```bash
-# 0) 依赖台账：numpy/scipy/opencv/yaml 已在根 readme.md；本包无新增系统依赖
+# 0) 依赖台账：Eigen/OpenCV/yaml-cpp 已在根 readme.md
 source /opt/ros/humble/setup.bash
 source /home/xu/arm_sim/install/setup.bash
 
@@ -150,17 +152,20 @@ ros2 service call /grasp/execute interfaces/srv/ExecuteGrasp \
 ## 测试
 
 ```bash
-cd applications/src/graspnet_pick
-python3 -m pytest -q test/test_geometry.py
+cd /home/xu/life_robot/applications
+source /opt/ros/humble/setup.bash
+source /home/xu/life_robot/interfaces/install/setup.bash
+colcon test --packages-select graspnet_pick --event-handlers console_direct+
+colcon test-result --verbose
 ```
 
 覆盖：深度反投影、平面去除（含法向约束）、聚类、PCA/桌面 OBB、抓取采样、
-NMS、手眼链式矩阵、标定 YAML 读取。
+手眼链式矩阵、标定 YAML 读取。
 
 ## 迁移目标
 
 | 当前 | 目标层 | 说明 |
 | ---- | ---- | ---- |
-| `geometry.py` + `grasp_estimator` | L3 `perception/` | 抓取位姿估计属于感知；届时话题不变 |
+| `geometry.cpp` + `grasp_estimator` | L3 `perception/` | 抓取位姿估计属于感知；届时话题不变 |
 | `/target_pose` + 夹爪话题 | L6 `motion/` | 用 L6 action 替换仿真桥，执行节点只调 action |
 | `sim_color_box_publisher.py` / `sim_move_to_view.py` | `tools/` 或仿真辅助 | 仅测试，不随正式 bringup 启动 |

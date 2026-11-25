@@ -1,1 +1,0 @@
-"""GraspNet pick application package."""

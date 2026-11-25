@@ -45,6 +45,11 @@
 | `ros-humble-joint-state-publisher` | 2.4.0 | 关节状态发布 | `sudo apt install -y ros-humble-joint-state-publisher` | ✅ |
 | `ros-humble-robot-state-publisher` | 3.0.3 | TF/机器人模型 | `sudo apt install -y ros-humble-robot-state-publisher` | ✅ |
 | `ros-humble-cv-bridge` | 3.2.1 | ROS Image ↔ OpenCV | `sudo apt install -y ros-humble-cv-bridge` | ✅ |
+| `ros-humble-tf2-ros` | 0.25.24 | C++ TF 查询/监听 | `sudo apt install -y ros-humble-tf2-ros` | ✅ |
+| `libeigen3-dev` | 3.4.0 | C++ 线性代数/变换 | `sudo apt install -y libeigen3-dev` | ✅ |
+| `libyaml-cpp-dev` | 0.7.0 | C++ 标定 YAML 读取 | `sudo apt install -y libyaml-cpp-dev` | ✅ |
+| `libopencv-dev` | 4.5.4 | C++ 图像/轮廓 | `sudo apt install -y libopencv-dev` | ✅ |
+| `libgtest-dev` | 1.11.0 | C++ gtest 单测 | `sudo apt install -y libgtest-dev` | ✅ |
 | `python3-opencv` | 4.5.4 | ArUco 检测 / PnP / 手眼标定 | `sudo apt install -y python3-opencv` | ✅ |
 | `python3-yaml` | 5.4.1 | 标定位姿/外参 YAML 读写 | `sudo apt install -y python3-yaml` | ✅ |
 | `ros-humble-moveit` | — | MoveIt2（L6 可选） | `sudo apt install -y ros-humble-moveit` | ⬜ 用 MoveIt 时 |
@@ -122,3 +127,4 @@
 | 2026-11-25 | 建立台账 | 记录环境、依赖、源码、命令与记录规则 |
 | 2026-11-25 | 补手眼标定依赖 | `cv_bridge`、`python3-opencv`、`python3-yaml` |
 | 2026-11-25 | 精简 | 去重、压缩表格，规则收敛到 §1 |
+| 2026-11-25 | 补 C++ 抓取应用依赖 | `tf2_ros`、Eigen、yaml-cpp、OpenCV dev、gtest |
