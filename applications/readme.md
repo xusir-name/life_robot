@@ -57,7 +57,11 @@ applications/src/<app_name>/
 └── test/
 ```
 
-当前包：`hand_eye_calibration`（眼在手上标定，见其 `README.md`）。
+当前包：
+
+- `hand_eye_calibration`：眼在手上标定（见其 `README.md`）。
+- `graspnet_pick`：仿真抓取闭环（RGB-D 框 → 最高分抓取 → 服务触发抓取），
+  两个节点 `grasp_estimator` / `grasp_executor`；算法为应用内纯函数，迁移目标见其 `README.md`。
 
 - 一应用一包；包名场景语义：`pick_place_app`、`teleop_app`。
 - 通用逻辑下沉；应用级 launch 不承担全系统 bringup。
@@ -66,6 +70,8 @@ applications/src/<app_name>/
 
 - 需要新能力 → 加到对应层并暴露接口，不在应用里临时实现（专用标定/调试算法除外，见上）。
 - 标定/调试类应用可在 `MANUAL`/离线模式调用运动接口（如 `/target_pose`），但**不得发 `/control/*`**；正式运行应经 L6 action。
+- **仿真验证例外**：允许应用包内以纯函数实现抓取位姿估计，并通过仿真 `/target_pose` 桥打通
+  “框 → 抓取 → 执行”链路；必须可单测、README 标注迁移目标，真机前迁移到 L3/L6。
 - SIGINT/SIGTERM 优雅取消任务后退出；启动检查依赖就绪。
 - action 异步调用，不阻塞 UI 主循环；高频展示限流。
 - 危险动作二次确认；`ESTOP/FAULT` 禁用运动入口；取消展示真实 `CANCELED`。
@@ -108,3 +114,11 @@ applications/src/<app_name>/
 | `applications/src/hand_eye_calibration/config/target_poses.yaml` | 相机目标位姿与 `look_at` | — | — | — |
 | `applications/src/hand_eye_calibration/launch/hand_eye_calibration.launch.py` | 标定启动入口 | `config/target_poses.yaml`、节点参数 | — | 启动节点 |
 | `applications/src/hand_eye_calibration/test/test_hand_eye.py` | 合成数据验证手眼求解 | `hand_eye.py` | — | — |
+| ★ `applications/src/graspnet_pick/graspnet_pick/estimator_node.py` | 框内抓取估计：RGB-D → 点云 → 最高分候选 | `geometry.py`、`transforms.py`、TF | `/camera/image_raw`、`/camera/depth/image_raw`、`/camera/camera_info`、`/grasp/target_box` | `/grasp/best_grasp`、`/grasp/best_pose` |
+| ★ `applications/src/graspnet_pick/graspnet_pick/executor_node.py` | 服务触发抓取：手眼变换、候选朝向重试、开/闭爪、抬起 | `transforms.py`、`interfaces`、TF | `/grasp/best_grasp`、`/arm_tcp_state`、`/target_pose_status`、`/joint_states`、`/grasp/execute` | `/target_pose`、`/gripper_controller/joint_trajectory` |
+| `applications/src/graspnet_pick/graspnet_pick/geometry.py` | 纯函数：反投影、去平面、聚类、OBB、抓取采样/评分/NMS | NumPy、SciPy | — | — |
+| `applications/src/graspnet_pick/graspnet_pick/transforms.py` | 刚体变换、四元数、标定 YAML 读取 | NumPy、SciPy、YAML | — | — |
+| `applications/src/graspnet_pick/launch/graspnet_pick.launch.py` | 估计 + 执行启动入口，集中赋值参数 | 节点参数、标定 YAML | — | 启动两个节点 |
+| `applications/src/graspnet_pick/test/sim_move_to_view.py` | 仿真辅助：相机观察位姿 → `/target_pose` | TF、MoveIt 桥 | — | `/target_pose`（测试） |
+| `applications/src/graspnet_pick/test/sim_color_box_publisher.py` | 仿真辅助：颜色阈值代替 YOLO 发框 | OpenCV | `/camera/image_raw` | `/grasp/target_box`（测试） |
+| `applications/src/graspnet_pick/test/test_geometry.py` | 抓取几何/变换单测 | `geometry.py`、`transforms.py` | — | — |

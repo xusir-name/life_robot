@@ -1,0 +1,20 @@
+# 用最近一次发布的 GraspCandidate 执行抓取。
+# 该服务会阻塞到动作结束（仿真中通常数秒），返回真实结果。
+
+float32 max_age_s   # 0 = 使用节点参数；候选超过该时间拒绝执行
+float32 timeout_s   # 0 = 使用节点参数；单次运动超时
+---
+uint8 ERROR_NONE = 0
+uint8 ERROR_BUSY = 1
+uint8 ERROR_NO_CANDIDATE = 2
+uint8 ERROR_STALE_CANDIDATE = 3
+uint8 ERROR_TRANSFORM = 4
+uint8 ERROR_INVALID_GRASP = 5
+uint8 ERROR_MOTION = 6
+uint8 ERROR_GRIPPER = 7
+uint8 ERROR_TIMEOUT = 8
+
+bool success
+uint8 error_code
+string message
+float32 score

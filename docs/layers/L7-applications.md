@@ -53,6 +53,13 @@
 - [ ] 不发布 `/control/*`，不实现规划/感知。
 - [ ] 操作日志可追溯；UI 断线不影响 L5 安全收敛。
 
+## 仿真验证例外（临时）
+
+- 为打通“检测框 → 抓取位姿 → 机械臂执行”链路，允许应用包内以**纯函数**实现抓取位姿估计，
+  并通过仿真 `/target_pose` 桥接运动；实现与参数必须可单测、README 标注迁移目标。
+- 仍**不得发布 `/control/*`**；真机前必须迁移到 L3（感知）与 L6（运动 action）。
+- 当前实例：[`applications/src/graspnet_pick`](../../applications/src/graspnet_pick/README.md)。
+
 ## 越界
 
 | 越界 | 正确 |

@@ -36,7 +36,8 @@ find_package(builtin_interfaces REQUIRED)
 # 详见仓库根目录 readme.md「新增自定义话题/接口的标准流程」。
 # ============================================================================
 set(INTERFACE_FILES
-  # 目前为空：全部通信都使用 ROS2 自带消息，见 readme.md「当前策略」
+  "msg/GraspCandidate.msg"
+  "srv/ExecuteGrasp.srv"
 )
 
 # rosidl 生成消息时需要的依赖包

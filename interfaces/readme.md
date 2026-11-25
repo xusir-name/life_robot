@@ -24,8 +24,8 @@ interfaces/
 └── interfaces/                 # 包名固定 interfaces
     ├── CMakeLists.txt          # INTERFACE_FILES / INTERFACE_DEPENDENCIES
     ├── package.xml             # <depend>
-    ├── msg/                    # 当前为空
-    ├── srv/                    # 当前为空
+    ├── msg/                    # GraspCandidate
+    ├── srv/                    # ExecuteGrasp
     └── action/                 # 当前为空
 ```
 
@@ -109,7 +109,8 @@ string task_id
 
 | 接口名 | 类型 | 话题/服务/动作 | 发布者 → 订阅者 | 引入日期 | 说明 |
 | ------ | ---- | -------------- | --------------- | -------- | ---- |
-| _（暂无）_ | — | — | — | — | 当前全部使用标准消息 |
+| `GraspCandidate` | msg | `/grasp/best_grasp` | `grasp_estimator` → `grasp_executor`、外部展示 | 2026-11-25 | 相机系最高分抓取：pose/score/width/source_box/backend |
+| `ExecuteGrasp` | srv | `/grasp/execute` | 调用方 → `grasp_executor` | 2026-11-25 | 用最近候选执行抓取；阻塞返回 success/error_code/message/score |
 
 ### 7.2 已确认使用的标准消息
 
@@ -123,6 +124,8 @@ string task_id
 | `/feedback/arm_status`、`/feedback/motor_status` | `diagnostic_msgs/DiagnosticArray` | 驱动 → 上层 | `agx_arm_ros` |
 | `/control_enable` | `std_srvs/SetBool` | 上层 → 驱动 | `agx_arm_ros` |
 | `/joint_states`、`/tf` | `sensor_msgs/JointState`、`tf2_msgs/TFMessage` | 全局 | `robot_state_publisher` |
+| `/grasp/best_pose` | `geometry_msgs/PoseStamped` | 感知 → 展示/调试 | `grasp_estimator` |
+| `/grasp/target_box` | `sensor_msgs/RegionOfInterest` | 检测 → 抓取估计 | YOLO/OBB/人工 |
 | `/planning_scene`、`/move_action` | `moveit_msgs/*` | MoveIt 生态 | MoveIt2 |
 
 ## 8. 兼容性红线
