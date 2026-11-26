@@ -116,7 +116,7 @@ applications/src/<app_name>/
 | `applications/src/hand_eye_calibration/launch/hand_eye_calibration.launch.py` | 标定启动入口 | `config/target_poses.yaml`、节点参数 | — | 启动节点 |
 | `applications/src/hand_eye_calibration/test/test_hand_eye.py` | 合成数据验证手眼求解 | `hand_eye.py` | — | — |
 | ★ `applications/src/graspnet_pick/src/estimator_node.cpp` | 框内抓取估计：RGB-D → 点云 → 最高分候选 | `geometry.cpp`、`transforms.cpp`、TF | `/camera/image_raw`、`/camera/depth/image_raw`、`/camera/camera_info`、`/grasp/target_box` | `/grasp/best_grasp`、`/grasp/best_pose` |
-| ★ `applications/src/graspnet_pick/src/executor_node.cpp` | 服务触发抓取：手眼变换、候选朝向重试、开/闭爪、抬起 | `transforms.cpp`、`interfaces`、TF | `/grasp/best_grasp`、`/arm_tcp_state`、`/target_pose_status`、`/joint_states`、`/grasp/execute` | `/target_pose`、`/gripper_controller/joint_trajectory` |
+| ★ `applications/src/graspnet_pick/src/executor_node.cpp` | 服务触发抓取：观察位姿/自动居中、手眼变换、候选朝向重试、开/闭爪、抬起 | `transforms.cpp`、`interfaces`、TF | `/grasp/best_grasp`、`/arm_tcp_state`、`/target_pose_status`、`/joint_states`、`/grasp/execute` | `/target_pose`、`/gripper_controller/joint_trajectory` |
 | `applications/src/graspnet_pick/src/grasp_estimator_main.cpp` | 估计节点 main | `estimator_node.cpp` | — | — |
 | `applications/src/graspnet_pick/src/grasp_executor_main.cpp` | 执行节点 main（多线程执行器） | `executor_node.cpp` | — | — |
 | `applications/src/graspnet_pick/src/geometry.cpp` | 纯函数：反投影、去平面、聚类、OBB、抓取采样/评分/NMS | Eigen、OpenCV | — | — |

@@ -21,6 +21,7 @@
 #include "interfaces/srv/execute_grasp.hpp"
 #include "sensor_msgs/msg/joint_state.hpp"
 #include "std_msgs/msg/string.hpp"
+#include "std_srvs/srv/trigger.hpp"
 #include "trajectory_msgs/msg/joint_trajectory.hpp"
 
 namespace graspnet_pick {
@@ -36,6 +37,9 @@ class GraspExecutor : public rclcpp::Node {
   void onTcp(const geometry_msgs::msg::PoseStamped::SharedPtr msg);
   void onMotionStatus(const std_msgs::msg::String::SharedPtr msg);
   void onJointStates(const sensor_msgs::msg::JointState::SharedPtr msg);
+  void onSetObservationPose(
+      const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
+      std::shared_ptr<std_srvs::srv::Trigger::Response> response);
   void onExecute(const std::shared_ptr<ExecuteGrasp::Request> request,
                  std::shared_ptr<ExecuteGrasp::Response> response);
 
@@ -54,6 +58,7 @@ class GraspExecutor : public rclcpp::Node {
   bool commandGripperDispatch(double opening_m, const std::string &label);
   bool commandGripperGazeboForce(double force_n, const std::string &label);
   bool openGripperGazebo(double width_m, const std::string &label);
+  uint8_t recenterTarget(std::string &message);
   bool switchGripperController(bool activate);
   bool applyJointEffort(const std::string &joint, double effort);
   bool clearJointEfforts();
@@ -78,6 +83,12 @@ class GraspExecutor : public rclcpp::Node {
   std::string gripper_topic_;
   std::vector<std::string> gripper_joints_;
   std::string joint_states_topic_;
+  std::string set_observation_pose_service_name_;
+  bool recenter_enabled_{true};
+  double recenter_tolerance_m_{0.005};
+  double recenter_max_step_m_{0.05};
+  int recenter_max_iterations_{3};
+  double recenter_settle_s_{0.8};
   std::string gripper_control_mode_;
   double gripper_close_squeeze_m_{0.002};
   double gripper_force_n_{1.5};
@@ -114,6 +125,7 @@ class GraspExecutor : public rclcpp::Node {
   std::string extrinsics_parent_;
   std::string extrinsics_child_;
   std::optional<interfaces::msg::GraspCandidate> candidate_;
+  std::optional<Eigen::Matrix4d> observation_tcp_;
   std::deque<geometry_msgs::msg::PoseStamped> tcp_buffer_;
   std::string motion_status_;
   bool has_motion_status_{false};
@@ -134,6 +146,7 @@ class GraspExecutor : public rclcpp::Node {
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr motion_status_sub_;
   rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr joint_states_sub_;
   rclcpp::Service<ExecuteGrasp>::SharedPtr service_;
+  rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr set_observation_pose_service_;
   rclcpp::CallbackGroup::SharedPtr callback_group_;
 
   std::unique_ptr<tf2_ros::Buffer> tf_buffer_;

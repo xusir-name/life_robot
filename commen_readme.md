@@ -276,3 +276,4 @@ cd /home/xu/life_robot/drivers/agx_arm_ws && colcon build --symlink-install && s
 | 2026-11-26 | 抓取应用加力控/软闭合 | 位置模式闭爪到 `宽度 - squeeze` 不再夹 0；`gazebo_force` 用 Gazebo 恒定力；`force` 用 AgileX `/control/joint_states.effort` |
 | 2026-11-26 | 抓取评分对齐下压 | 垂直权重提高到 0.30；垂直候选先试候选闭合轴，再试当前偏航 |
 | 2026-11-26 | 抓取防滑落 | 恒力默认 2.0N；先纯竖直抬起并检测滑落；仿真 `arm_sim` 摩擦系数调到 5.0 |
+| 2026-11-26 | 观察位姿 + 自动居中 | `/grasp/set_observation_pose` 记录 TCP；执行前回位并最多 3 次把目标移到相机中心 |

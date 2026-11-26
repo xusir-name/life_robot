@@ -88,6 +88,15 @@ GraspExecutor::GraspExecutor(const rclcpp::NodeOptions &options)
       "gripper_joints", "gripper_joint1,gripper_joint2"));
   joint_states_topic_ =
       declare_parameter<std::string>("joint_states_topic", "/joint_states");
+  set_observation_pose_service_name_ = declare_parameter<std::string>(
+      "set_observation_pose_service", "/grasp/set_observation_pose");
+  recenter_enabled_ = declare_parameter<bool>("recenter_enabled", true);
+  recenter_tolerance_m_ =
+      declare_parameter<double>("recenter_tolerance_m", 0.005);
+  recenter_max_step_m_ = declare_parameter<double>("recenter_max_step_m", 0.05);
+  recenter_max_iterations_ =
+      declare_parameter<int>("recenter_max_iterations", 3);
+  recenter_settle_s_ = declare_parameter<double>("recenter_settle_s", 0.8);
   gripper_control_mode_ =
       declare_parameter<std::string>("gripper_control_mode", "position");
   gripper_close_squeeze_m_ =
@@ -193,11 +202,17 @@ GraspExecutor::GraspExecutor(const rclcpp::NodeOptions &options)
       std::bind(&GraspExecutor::onExecute, this, std::placeholders::_1,
                 std::placeholders::_2),
       rmw_qos_profile_services_default, callback_group_);
+  set_observation_pose_service_ = create_service<std_srvs::srv::Trigger>(
+      set_observation_pose_service_name_,
+      std::bind(&GraspExecutor::onSetObservationPose, this,
+                std::placeholders::_1, std::placeholders::_2),
+      rmw_qos_profile_services_default, callback_group_);
 
   RCLCPP_INFO(get_logger(),
-              "grasp_executor ready: service=%s, motion=%s, gripper=%s",
-              service_name_.c_str(), motion_topic_.c_str(),
-              gripper_topic_.c_str());
+              "grasp_executor ready: service=%s, observation=%s, motion=%s, "
+              "gripper=%s",
+              service_name_.c_str(), set_observation_pose_service_name_.c_str(),
+              motion_topic_.c_str(), gripper_topic_.c_str());
 }
 
 void GraspExecutor::validateParams() const {
@@ -234,6 +249,11 @@ void GraspExecutor::validateParams() const {
   }
   if (gripper_close_squeeze_m_ < 0.0) {
     throw std::invalid_argument("gripper_close_squeeze_m must be >= 0");
+  }
+  if (recenter_tolerance_m_ <= 0.0 || recenter_max_step_m_ <= 0.0 ||
+      recenter_max_iterations_ < 1 || recenter_settle_s_ < 0.0) {
+    throw std::invalid_argument(
+        "recenter parameters must be positive (iterations >= 1)");
   }
   if ((gripper_control_mode_ == "force" ||
        gripper_control_mode_ == "gazebo_force") &&
@@ -310,6 +330,30 @@ void GraspExecutor::onJointStates(
   }
 }
 
+void GraspExecutor::onSetObservationPose(
+    const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
+    std::shared_ptr<std_srvs::srv::Trigger::Response> response) {
+  (void)request;
+  std::lock_guard<std::mutex> lock(state_mutex_);
+  if (tcp_buffer_.empty()) {
+    response->success = false;
+    response->message = "no TCP feedback yet";
+    return;
+  }
+  try {
+    observation_tcp_ = poseMsgToMatrix(tcp_buffer_.back().pose);
+  } catch (const std::exception &exc) {
+    response->success = false;
+    response->message = std::string("invalid TCP pose: ") + exc.what();
+    return;
+  }
+  response->success = true;
+  response->message = "observation pose recorded from current TCP";
+  RCLCPP_INFO(get_logger(), "observation pose recorded: p=[%.3f, %.3f, %.3f]",
+              (*observation_tcp_)(0, 3), (*observation_tcp_)(1, 3),
+              (*observation_tcp_)(2, 3));
+}
+
 void GraspExecutor::onExecute(
     const std::shared_ptr<ExecuteGrasp::Request> request,
     std::shared_ptr<ExecuteGrasp::Response> response) {
@@ -347,6 +391,35 @@ void GraspExecutor::fail(ExecuteGrasp::Response &response, uint8_t code,
 
 void GraspExecutor::execute(const ExecuteGrasp::Request &request,
                             ExecuteGrasp::Response &response) {
+  std::optional<Eigen::Matrix4d> observation;
+  {
+    std::lock_guard<std::mutex> lock(state_mutex_);
+    observation = observation_tcp_;
+  }
+  const double timeout =
+      request.timeout_s > 0.0f ? request.timeout_s : motion_timeout_s_;
+
+  if (observation.has_value()) {
+    const Eigen::Matrix4d T_obs_ee =
+        *observation * invertTransform(T_ee_tcp_);
+    if (!moveTo(T_obs_ee, "observation", timeout)) {
+      fail(response, ExecuteGrasp::Response::ERROR_MOTION,
+           "failed to move to observation pose");
+      return;
+    }
+    std::this_thread::sleep_for(
+        std::chrono::duration<double>(std::max(0.0, recenter_settle_s_)));
+  }
+
+  if (recenter_enabled_) {
+    std::string message;
+    const uint8_t code = recenterTarget(message);
+    if (code != ExecuteGrasp::Response::ERROR_NONE) {
+      fail(response, code, message);
+      return;
+    }
+  }
+
   std::optional<interfaces::msg::GraspCandidate> candidate;
   {
     std::lock_guard<std::mutex> lock(state_mutex_);
@@ -360,8 +433,6 @@ void GraspExecutor::execute(const ExecuteGrasp::Request &request,
 
   const double max_age =
       request.max_age_s > 0.0f ? request.max_age_s : max_candidate_age_s_;
-  const double timeout =
-      request.timeout_s > 0.0f ? request.timeout_s : motion_timeout_s_;
   const rclcpp::Time stamp(candidate->header.stamp,
                            get_clock()->get_clock_type());
   if (stamp.nanoseconds() == 0) {
@@ -650,6 +721,69 @@ bool GraspExecutor::commandGripperDispatch(double opening_m,
     return openGripperGazebo(opening_m, label);
   }
   return commandGripper(opening_m, label);
+}
+
+uint8_t GraspExecutor::recenterTarget(std::string &message) {
+  for (int iter = 0; iter < recenter_max_iterations_; ++iter) {
+    std::optional<interfaces::msg::GraspCandidate> candidate;
+    {
+      std::lock_guard<std::mutex> lock(state_mutex_);
+      candidate = candidate_;
+    }
+    if (!candidate.has_value()) {
+      message = "no GraspCandidate for recentering";
+      return ExecuteGrasp::Response::ERROR_NO_CANDIDATE;
+    }
+    const rclcpp::Time stamp(candidate->header.stamp,
+                             get_clock()->get_clock_type());
+    if (stamp.nanoseconds() == 0) {
+      message = "candidate has zero timestamp";
+      return ExecuteGrasp::Response::ERROR_INVALID_GRASP;
+    }
+    const auto tcp_match = nearestTcp(stamp);
+    if (!tcp_match.has_value()) {
+      message = "no TCP feedback for recentering";
+      return ExecuteGrasp::Response::ERROR_TRANSFORM;
+    }
+    const Eigen::Matrix4d T_base_tcp = poseMsgToMatrix(tcp_match->first.pose);
+    const Eigen::Matrix4d T_base_cam = T_base_tcp * T_tcp_cam_;
+    const Eigen::Vector3d p_cam(candidate->pose.position.x,
+                                candidate->pose.position.y,
+                                candidate->pose.position.z);
+    const Eigen::Vector2d error(p_cam.x(), p_cam.y());
+    if (error.norm() <= recenter_tolerance_m_) {
+      RCLCPP_INFO(get_logger(),
+                  "recenter converged after %d iterations: err=%.1fmm", iter,
+                  error.norm() * 1000.0);
+      return ExecuteGrasp::Response::ERROR_NONE;
+    }
+
+    Eigen::Vector3d delta_cam(p_cam.x(), p_cam.y(), 0.0);
+    if (delta_cam.norm() > recenter_max_step_m_) {
+      delta_cam *= recenter_max_step_m_ / delta_cam.norm();
+    }
+    const Eigen::Vector3d delta_base =
+        T_base_cam.block<3, 3>(0, 0) * delta_cam;
+    Eigen::Matrix4d T_base_tcp_next = T_base_tcp;
+    T_base_tcp_next.block<3, 1>(0, 3) += delta_base;
+    const Eigen::Matrix4d T_base_ee_next =
+        T_base_tcp_next * invertTransform(T_ee_tcp_);
+    std::ostringstream label;
+    label << "recenter[" << iter << "]";
+    RCLCPP_INFO(get_logger(),
+                "recenter[%d]: image error=%.1fmm, move camera by "
+                "[%.3f, %.3f, 0]m",
+                iter, error.norm() * 1000.0, p_cam.x(), p_cam.y());
+    if (!moveTo(T_base_ee_next, label.str(), motion_timeout_s_)) {
+      message = "recenter motion failed";
+      return ExecuteGrasp::Response::ERROR_MOTION;
+    }
+    std::this_thread::sleep_for(
+        std::chrono::duration<double>(std::max(0.0, recenter_settle_s_)));
+  }
+  RCLCPP_WARN(get_logger(),
+              "recenter reached max iterations; continue with latest candidate");
+  return ExecuteGrasp::Response::ERROR_NONE;
 }
 
 bool GraspExecutor::switchGripperController(bool activate) {

@@ -103,6 +103,14 @@ def generate_launch_description():
         DeclareLaunchArgument("min_grasp_opening_m", default_value="0.005"),
         DeclareLaunchArgument("prefer_vertical_approach", default_value="true"),
         DeclareLaunchArgument("joint_states_topic", default_value="/joint_states"),
+        DeclareLaunchArgument(
+            "set_observation_pose_service", default_value="/grasp/set_observation_pose"
+        ),
+        DeclareLaunchArgument("recenter_enabled", default_value="true"),
+        DeclareLaunchArgument("recenter_tolerance_m", default_value="0.005"),
+        DeclareLaunchArgument("recenter_max_step_m", default_value="0.05"),
+        DeclareLaunchArgument("recenter_max_iterations", default_value="3"),
+        DeclareLaunchArgument("recenter_settle_s", default_value="0.8"),
         DeclareLaunchArgument("gripper_control_mode", default_value="position"),
         DeclareLaunchArgument("gripper_close_squeeze_m", default_value="0.002"),
         DeclareLaunchArgument("gripper_force_n", default_value="2.0"),
@@ -209,6 +217,14 @@ def generate_launch_description():
                 "min_grasp_opening_m": _f("min_grasp_opening_m"),
                 "prefer_vertical_approach": _b("prefer_vertical_approach"),
                 "joint_states_topic": LaunchConfiguration("joint_states_topic"),
+                "set_observation_pose_service": LaunchConfiguration(
+                    "set_observation_pose_service"
+                ),
+                "recenter_enabled": _b("recenter_enabled"),
+                "recenter_tolerance_m": _f("recenter_tolerance_m"),
+                "recenter_max_step_m": _f("recenter_max_step_m"),
+                "recenter_max_iterations": _i("recenter_max_iterations"),
+                "recenter_settle_s": _f("recenter_settle_s"),
                 "gripper_control_mode": LaunchConfiguration("gripper_control_mode"),
                 "gripper_close_squeeze_m": _f("gripper_close_squeeze_m"),
                 "gripper_force_n": _f("gripper_force_n"),

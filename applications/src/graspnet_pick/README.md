@@ -51,6 +51,7 @@ RGB-D + 目标框 → 抓取候选（最高分） → GraspCandidate 话题
 | 发布 | `/gripper_controller/joint_trajectory` | `trajectory_msgs/JointTrajectory` | 仿真夹爪 |
 | 订阅 | `/joint_states` | `sensor_msgs/JointState` | 闭爪后检查是否夹空 |
 | 服务 | `/grasp/execute` | `interfaces/ExecuteGrasp` | 用最近候选执行抓取，阻塞返回结果 |
+| 服务 | `/grasp/set_observation_pose` | `std_srvs/Trigger` | 记录当前 TCP 为观察位姿；执行时先回该位姿 |
 
 ## 坐标与手眼
 
@@ -111,6 +112,23 @@ ros2 service call /grasp/execute interfaces/srv/ExecuteGrasp \
 
 `/grasp/execute` 会阻塞到动作结束；返回 `success`、`error_code`、`message`、`score`。
 候选超过 `max_age_s`、图像与 TCP 时间差超限、抓手闭空都会失败并给出原因。
+
+### 先设置观察位姿，再自动居中抓取
+
+```bash
+# 1. 手动/遥操作把臂移到能看见目标的位置
+# 2. 记录当前 TCP 为观察位姿
+ros2 service call /grasp/set_observation_pose std_srvs/srv/Trigger "{}"
+
+# 3. 发布目标框后执行；执行节点会：
+#    回观察位姿 -> 用候选位姿把目标移到相机中心 -> 常规预抓取/抓取
+ros2 service call /grasp/execute interfaces/srv/ExecuteGrasp \
+  "{max_age_s: 8.0, timeout_s: 60.0}"
+```
+
+居中逻辑：用 `GraspCandidate` 在相机系的 `x/y` 作为目标偏差，换算到基座系后平移
+TCP（相机刚性固定在末端），最多 `recenter_max_iterations` 次，直到偏差小于
+`recenter_tolerance_m`。观察位姿是 TCP 位姿，所以手动示教后直接记录即可。
 
 仿真 Gazebo 恒定力闭合（推荐，不再走位置控制器）：
 
@@ -175,10 +193,17 @@ ros2 launch graspnet_pick graspnet_pick.launch.py \
 | `min_grasp_opening_m` | `0.005` | 闭爪后小于此视为夹空 |
 | `prefer_vertical_approach` | `true` | 优先夹爪朝下：0/15/30/45° 下压，失败后才退回候选/水平侧抓 |
 | `grasp_height_offset_m` | `0.0` | 抓取点沿基座 +Z 的额外偏移；接触点偏低时向上调 |
+| `set_observation_pose_service` | `/grasp/set_observation_pose` | 记录观察位姿的 Trigger 服务 |
+| `recenter_enabled` | `true` | 执行前是否自动把目标移到相机中心 |
+| `recenter_tolerance_m` | `0.005` | 居中容差（相机系 x/y） |
+| `recenter_max_step_m` | `0.05` | 单次居中最大平移 |
+| `recenter_max_iterations` | `3` | 最多居中次数 |
+| `recenter_settle_s` | `0.8` | 每次居中/观察位姿后等待新图像 |
 
 ## 安全与边界
 
 - 仿真运动走 `/target_pose`（MoveIt 桥），**不发布 `/control/*`**；真机正式运行必须经 L6 action。
+- 观察位姿 + 自动居中只做 x/y 平移，不改变末端姿态；目标仍由 `/grasp/target_box` 指定。
 - 夹爪 `position` 模式发 `JointTrajectory`，仅用于当前仿真；闭爪目标为
   `检测宽度 - gripper_close_squeeze_m`，不再命令 0。
 - 夹爪 `gazebo_force` 模式停用位置控制器，直接给两指关节施加恒定力；

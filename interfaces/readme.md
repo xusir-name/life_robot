@@ -126,6 +126,7 @@ string task_id
 | `/joint_states`、`/tf` | `sensor_msgs/JointState`、`tf2_msgs/TFMessage` | 全局 | `robot_state_publisher` |
 | `/grasp/best_pose` | `geometry_msgs/PoseStamped` | 感知 → 展示/调试 | `grasp_estimator` |
 | `/grasp/target_box` | `sensor_msgs/RegionOfInterest` | 检测 → 抓取估计 | YOLO/OBB/人工 |
+| `/grasp/set_observation_pose` | `std_srvs/Trigger` | 调用方 → 抓取执行 | `grasp_executor` |
 | `/planning_scene`、`/move_action` | `moveit_msgs/*` | MoveIt 生态 | MoveIt2 |
 
 ## 8. 兼容性红线
