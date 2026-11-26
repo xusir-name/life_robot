@@ -541,6 +541,32 @@ std::vector<Grasp> sampleGrasps(const std::vector<Eigen::Vector3d> &points,
       unique_labels.insert(label);
     }
   }
+  if (options.preferred_point.has_value() && !unique_labels.empty()) {
+    int best_label = -1;
+    double best_distance = std::numeric_limits<double>::infinity();
+    for (int label : unique_labels) {
+      Eigen::Vector3d centroid = Eigen::Vector3d::Zero();
+      int count = 0;
+      for (std::size_t i = 0; i < points.size(); ++i) {
+        if (labels[i] == label) {
+          centroid += points[i];
+          ++count;
+        }
+      }
+      if (count == 0) {
+        continue;
+      }
+      centroid /= static_cast<double>(count);
+      const double distance = (centroid - *options.preferred_point).norm();
+      if (distance < best_distance) {
+        best_distance = distance;
+        best_label = label;
+      }
+    }
+    if (best_label >= 0) {
+      unique_labels = {best_label};
+    }
+  }
 
   std::vector<Grasp> candidates;
   for (int label : unique_labels) {

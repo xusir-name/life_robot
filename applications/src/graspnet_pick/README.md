@@ -17,7 +17,8 @@ RGB-D + 目标框 → 抓取候选（最高分） → GraspCandidate 话题
                          开爪 → 预抓取 → 抓取 → 闭爪 → 抬起
 ```
 
-- **一个框一个目标**：框由 YOLO/OBB/人工给出，本包不做检测。
+- **一个框一个目标**：框由 YOLO/OBB/人工给出，本包不做检测；估计器只取
+  “质心离框中心最近”的聚类，避免框内相邻物体被合并成一个候选。
 - **GraspNet 后端**：当前是 C++ 几何后端（平面去除 + 聚类 + 桌面约束 OBB + 力闭合候选），
   输出 GraspNet 风格的 6-DoF 抓取（`z=approach`、`y=闭合轴`、`x=y×z`）。
   官方 GraspNet 网络需要 `checkpoint-rs.tar` / `pointnet2_ops` / CUDA 工具链，
@@ -133,14 +134,15 @@ ros2 service call /grasp/execute interfaces/srv/ExecuteGrasp \
 | `gripper_joint_limit_m` | `0.05` | 单指行程（仿真 prismatic） |
 | `gripper_settle_s` | `1.5` | 必须大于 `gripper_move_time_s`，否则会在夹爪未闭合时就读反馈 |
 | `min_grasp_opening_m` | `0.005` | 闭爪后小于此视为夹空 |
-| `prefer_vertical_approach` | `true` | 候选/当前偏航/水平侧抓都失败后再尝试垂直下降 |
+| `prefer_vertical_approach` | `true` | 优先夹爪朝下：0/15/30/45° 下压，失败后才退回候选/水平侧抓 |
 | `grasp_height_offset_m` | `0.0` | 抓取点沿基座 +Z 的额外偏移；接触点偏低时向上调 |
 
 ## 安全与边界
 
 - 仿真运动走 `/target_pose`（MoveIt 桥），**不发布 `/control/*`**；真机正式运行必须经 L6 action。
 - 夹爪直接发 `JointTrajectory`，仅用于当前仿真；真机由 L6/驱动适配。
-- 规划失败会按“水平侧抓 → 候选朝向 → 保持当前偏航 → 当前腕姿 → 垂直”顺序重试；
+- 规划失败会按“垂直 0° → 15° → 30° → 45°（当前/候选偏航）→ 候选朝向 →
+  当前腕姿 → 水平侧抓”顺序重试；优先夹爪朝下，避免大夹爪水平进入顶到突台。
   全部失败时开爪并返回 `ERROR_MOTION`。
 - 闭爪后读 `/joint_states`，开口 < `min_grasp_opening_m` 判定夹空并开爪返回失败。
 - 服务阻塞期间用多线程执行器保证 TCP/状态回调继续运行；同一时间只允许一个抓取。

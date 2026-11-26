@@ -370,6 +370,9 @@ void GraspExecutor::execute(const ExecuteGrasp::Request &request,
   for (std::size_t index = 0; index < rotations.size(); ++index) {
     Eigen::Matrix4d T_base_tcp = T_base_tcp_grasp;
     T_base_tcp.block<3, 3>(0, 0) = rotations[index];
+    const Eigen::Vector3d approach_z = rotations[index].col(2);
+    RCLCPP_INFO(get_logger(), "orientation[%zu] approach=[%.2f, %.2f, %.2f]",
+                index, approach_z.x(), approach_z.y(), approach_z.z());
     const Eigen::Matrix4d T_base_ee = T_base_tcp * invertTransform(T_ee_tcp_);
     if (pregrasp_distance_m_ > 0.0) {
       const Eigen::Matrix4d T_base_tcp_pre =
@@ -597,15 +600,28 @@ std::optional<Eigen::Matrix3d> GraspExecutor::rotationWithApproach(
 std::vector<Eigen::Matrix3d> GraspExecutor::orientationCandidates(
     const Eigen::Matrix3d &R_grasp, const Eigen::Matrix3d &R_current) {
   std::vector<Eigen::Matrix3d> candidates;
-  // Side grasp first, as in the Python implementation.
-  for (const auto &approach :
-       {Eigen::Vector3d(1.0, 0.0, 0.0), Eigen::Vector3d(0.0, 1.0, 0.0),
-        Eigen::Vector3d(0.0, -1.0, 0.0)}) {
-    auto R = rotationWithApproach(approach, Eigen::Vector3d(0.0, 1.0, 0.0));
-    if (R.has_value()) {
-      candidates.push_back(*R);
+
+  // 优先“夹爪朝下”：先纯垂直，再向 +X 倾斜 15/30/45°，避免大夹爪水平
+  // 进入时顶到突台/桌面。每个倾角尝试当前偏航和候选偏航。
+  if (prefer_vertical_approach_) {
+    const std::vector<double> tilts_deg{0.0, 15.0, 30.0, 45.0};
+    const std::vector<Eigen::Vector3d> closings{
+        R_current.col(1), R_current.col(0), R_grasp.col(1),
+        Eigen::Vector3d(1.0, 0.0, 0.0), Eigen::Vector3d(0.0, 1.0, 0.0)};
+    for (std::size_t ti = 0; ti < tilts_deg.size(); ++ti) {
+      const double tilt = tilts_deg[ti] * M_PI / 180.0;
+      const Eigen::Vector3d approach(std::sin(tilt), 0.0, -std::cos(tilt));
+      const std::size_t close_count = ti <= 1 ? 2U : 1U;
+      for (std::size_t ci = 0; ci < close_count; ++ci) {
+        auto R = rotationWithApproach(approach, closings[ci]);
+        if (R.has_value()) {
+          candidates.push_back(*R);
+        }
+      }
     }
   }
+
+  // 估计器给出的朝向（通常沿相机射线，约 45° 下压）。
   candidates.push_back(R_grasp);
   const Eigen::Vector3d approach = R_grasp.col(2);
   for (const auto &closing : {R_current.col(1), R_current.col(0)}) {
@@ -621,13 +637,14 @@ std::vector<Eigen::Matrix3d> GraspExecutor::orientationCandidates(
     }
   }
   candidates.push_back(R_current);
-  if (prefer_vertical_approach_) {
-    for (const auto &closing :
-         {R_current.col(1), R_current.col(0), R_grasp.col(1)}) {
-      auto R = rotationWithApproach(Eigen::Vector3d(0.0, 0.0, -1.0), closing);
-      if (R.has_value()) {
-        candidates.push_back(*R);
-      }
+
+  // 最后才退回水平侧抓。
+  for (const auto &horizontal :
+       {Eigen::Vector3d(1.0, 0.0, 0.0), Eigen::Vector3d(0.0, 1.0, 0.0),
+        Eigen::Vector3d(0.0, -1.0, 0.0)}) {
+    auto R = rotationWithApproach(horizontal, Eigen::Vector3d(0.0, 1.0, 0.0));
+    if (R.has_value()) {
+      candidates.push_back(*R);
     }
   }
   Eigen::Matrix3d y_neg;

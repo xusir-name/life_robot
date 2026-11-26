@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <limits>
 #include <stdexcept>
 #include <utility>
 
@@ -268,6 +269,24 @@ void GraspEstimator::estimate(const cv::Rect &roi) {
     return;
   }
 
+  std::optional<Eigen::Vector3d> preferred_point;
+  if (!cloud.points.empty() && !cloud.uv.empty()) {
+    const double center_u = static_cast<double>(roi.x) + roi.width * 0.5;
+    const double center_v = static_cast<double>(roi.y) + roi.height * 0.5;
+    double best_distance = std::numeric_limits<double>::infinity();
+    std::size_t best_index = 0;
+    for (std::size_t i = 0; i < cloud.uv.size(); ++i) {
+      const double du = cloud.uv[i].x() - center_u;
+      const double dv = cloud.uv[i].y() - center_v;
+      const double distance = du * du + dv * dv;
+      if (distance < best_distance) {
+        best_distance = distance;
+        best_index = i;
+      }
+    }
+    preferred_point = cloud.points[best_index];
+  }
+
   std::optional<Eigen::Vector3d> up = tableNormalCamera(*depth_stamp_);
   std::vector<Eigen::Vector3d> points = std::move(cloud.points);
   if (remove_plane_) {
@@ -295,6 +314,7 @@ void GraspEstimator::estimate(const cv::Rect &roi) {
   options.nms_rotation_rad = nms_rotation_rad_;
   options.max_grasps = max_grasps_;
   options.up = up;
+  options.preferred_point = preferred_point;
   const auto grasps = sampleGrasps(points, options);
   const auto best = selectBestGrasp(grasps, min_score_);
   if (!best.has_value()) {

@@ -42,6 +42,8 @@ struct GraspSamplingOptions {
   double nms_rotation_rad{0.5235987755982988};
   int max_grasps{200};
   std::optional<Eigen::Vector3d> up;
+  // 若给出，只处理质心离该点最近的聚类（一个框一个目标）。
+  std::optional<Eigen::Vector3d> preferred_point;
 };
 
 PointCloud depthToPoints(const cv::Mat &depth, const Eigen::Matrix3d &K,
