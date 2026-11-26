@@ -110,6 +110,21 @@ ros2 service call /grasp/execute interfaces/srv/ExecuteGrasp \
 `/grasp/execute` 会阻塞到动作结束；返回 `success`、`error_code`、`message`、`score`。
 候选超过 `max_age_s`、图像与 TCP 时间差超限、抓手闭空都会失败并给出原因。
 
+仿真 Gazebo 恒定力闭合（推荐，不再走位置控制器）：
+
+```bash
+ros2 launch graspnet_pick graspnet_pick.launch.py \
+  use_sim_time:=true \
+  gripper_control_mode:=gazebo_force \
+  gripper_force_n:=1.5
+```
+
+它会：
+
+1. 通过 `/controller_manager/switch_controller` 停用 `gripper_controller`；
+2. 通过 `/apply_joint_effort` 给 `gripper_joint1/2` 持续输出恒定力；
+3. 夹住后保持力，下一次开爪时 `/clear_joint_efforts` 清力并重新激活位置控制器。
+
 真机 AgileX 力控（夹持力 1.5N，不再用仿真位置控制器）：
 
 ```bash
@@ -142,11 +157,16 @@ ros2 launch graspnet_pick graspnet_pick.launch.py \
 | `finger_length_m` | `0.0` | 机器人 TCP 到指腹的额外前伸；仿真 `/arm_tcp_state` 已在指根/接触中心，保持 0 |
 | `pregrasp_distance_m` / `retreat_distance_m` | `0.08` / `0.08` | 预抓取/后退 |
 | `lift_height_m` | `0.05` | 抬起叠加基座 +Z |
-| `gripper_control_mode` | `position` | `position`=仿真位置控制；`force`=AgileX 力控（`/control/joint_states` 的 `effort`） |
+| `gripper_control_mode` | `position` | `position`=仿真位置控制（软闭合）；`gazebo_force`=仿真恒定力；`force`=真机 AgileX 力控（`/control/joint_states.effort`） |
 | `gripper_close_squeeze_m` | `0.002` | 闭爪目标 = 检测宽度 - 该值；不再直接命令 0，减小挤爆/弹飞 |
 | `gripper_force_n` | `1.5` | `force` 模式夹持力，AgileX 允许 [0.5, 3.0] N |
 | `gripper_force_joint` | `gripper` | 真机夹爪关节名（宽度） |
 | `gripper_force_topic` | `/control/joint_states` | 真机力控指令话题（`JointState.position=宽度, effort=力`） |
+| `gripper_effort_signs` | `-1.0,1.0` | 仿真恒定力两指方向；`gazebo_force` 用 |
+| `gazebo_apply_joint_effort_service` | `/apply_joint_effort` | Gazebo 恒定力服务 |
+| `gazebo_clear_joint_efforts_service` | `/clear_joint_efforts` | Gazebo 清力服务 |
+| `controller_switch_service` | `/controller_manager/switch_controller` | 停用/恢复 `gripper_controller` |
+| `gripper_controller_name` | `gripper_controller` | 仿真位置控制器名 |
 | `gripper_max_opening_m` | `0.095` | 夹爪最大开口 |
 | `gripper_joint_limit_m` | `0.05` | 单指行程（仿真 prismatic） |
 | `gripper_settle_s` | `1.5` | 必须大于 `gripper_move_time_s`，否则会在夹爪未闭合时就读反馈 |
@@ -159,6 +179,8 @@ ros2 launch graspnet_pick graspnet_pick.launch.py \
 - 仿真运动走 `/target_pose`（MoveIt 桥），**不发布 `/control/*`**；真机正式运行必须经 L6 action。
 - 夹爪 `position` 模式发 `JointTrajectory`，仅用于当前仿真；闭爪目标为
   `检测宽度 - gripper_close_squeeze_m`，不再命令 0。
+- 夹爪 `gazebo_force` 模式停用位置控制器，直接给两指关节施加恒定力；
+  成功夹住后保持力，下一次开爪时清力并恢复位置控制器。
 - 夹爪 `force` 模式发 `/control/joint_states`（`position=宽度`、`effort=力`），
   使用 AgileX 驱动内置力控；这是当前真机联调的临时路径，正式运行应迁到 L6。
 - 真正的导纳控制需要力/力矩反馈和 L6 控制器；当前 `force` 模式是“力上限”控制，

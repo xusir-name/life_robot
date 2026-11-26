@@ -6,6 +6,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <future>
 #include <sstream>
 #include <stdexcept>
 #include <thread>
@@ -28,6 +29,26 @@ std::vector<std::string> splitJointNames(const std::string &value) {
     }
   }
   return out;
+}
+
+std::vector<double> splitDoubles(const std::string &value) {
+  std::vector<double> out;
+  std::stringstream ss(value);
+  std::string item;
+  while (std::getline(ss, item, ',')) {
+    try {
+      out.push_back(std::stod(item));
+    } catch (const std::exception &) {
+      // ignore malformed item; validateParams will catch size
+    }
+  }
+  return out;
+}
+
+template <typename FutureT>
+bool waitReady(FutureT &future, double timeout_s) {
+  return future.wait_for(std::chrono::duration<double>(timeout_s)) ==
+         std::future_status::ready;
 }
 
 bool startsWith(const std::string &value, const char *prefix) {
@@ -76,6 +97,16 @@ GraspExecutor::GraspExecutor(const rclcpp::NodeOptions &options)
       declare_parameter<std::string>("gripper_force_joint", "gripper");
   gripper_force_topic_ =
       declare_parameter<std::string>("gripper_force_topic", "/control/joint_states");
+  gazebo_apply_joint_effort_service_ = declare_parameter<std::string>(
+      "gazebo_apply_joint_effort_service", "/apply_joint_effort");
+  gazebo_clear_joint_efforts_service_ = declare_parameter<std::string>(
+      "gazebo_clear_joint_efforts_service", "/clear_joint_efforts");
+  controller_switch_service_ = declare_parameter<std::string>(
+      "controller_switch_service", "/controller_manager/switch_controller");
+  gripper_controller_name_ =
+      declare_parameter<std::string>("gripper_controller_name", "gripper_controller");
+  gripper_effort_signs_ = splitDoubles(declare_parameter<std::string>(
+      "gripper_effort_signs", "-1.0,1.0"));
 
   max_candidate_age_s_ = declare_parameter<double>("max_candidate_age_s", 3.0);
   max_stamp_diff_s_ = declare_parameter<double>("max_stamp_diff_s", 0.15);
@@ -122,6 +153,14 @@ GraspExecutor::GraspExecutor(const rclcpp::NodeOptions &options)
       gripper_topic_, rclcpp::QoS(10));
   gripper_force_pub_ = create_publisher<sensor_msgs::msg::JointState>(
       gripper_force_topic_, rclcpp::QoS(10));
+  apply_effort_client_ =
+      create_client<gazebo_msgs::srv::ApplyJointEffort>(
+          gazebo_apply_joint_effort_service_);
+  clear_efforts_client_ = create_client<gazebo_msgs::srv::JointRequest>(
+      gazebo_clear_joint_efforts_service_);
+  switch_controller_client_ =
+      create_client<controller_manager_msgs::srv::SwitchController>(
+          controller_switch_service_);
   candidate_sub_ = create_subscription<interfaces::msg::GraspCandidate>(
       candidate_topic_, rclcpp::QoS(10),
       std::bind(&GraspExecutor::onCandidate, this, std::placeholders::_1),
@@ -188,17 +227,25 @@ void GraspExecutor::validateParams() const {
         "gripper_settle_s must be >= gripper_move_time_s; otherwise joint "
         "feedback is read before the gripper stops");
   }
-  if (gripper_control_mode_ != "position" && gripper_control_mode_ != "force") {
+  if (gripper_control_mode_ != "position" && gripper_control_mode_ != "force" &&
+      gripper_control_mode_ != "gazebo_force") {
     throw std::invalid_argument(
-        "gripper_control_mode must be 'position' or 'force'");
+        "gripper_control_mode must be 'position', 'force' or 'gazebo_force'");
   }
   if (gripper_close_squeeze_m_ < 0.0) {
     throw std::invalid_argument("gripper_close_squeeze_m must be >= 0");
   }
-  if (gripper_control_mode_ == "force" &&
+  if ((gripper_control_mode_ == "force" ||
+       gripper_control_mode_ == "gazebo_force") &&
       (gripper_force_n_ < 0.5 || gripper_force_n_ > 3.0)) {
     throw std::invalid_argument(
-        "gripper_force_n must be in [0.5, 3.0] N for AgileX force control");
+        "gripper_force_n must be in [0.5, 3.0] N for force control");
+  }
+  if (gripper_control_mode_ == "gazebo_force") {
+    if (gripper_joints_.size() != 2 || gripper_effort_signs_.size() != 2) {
+      throw std::invalid_argument(
+          "gazebo_force requires two gripper_joints and two gripper_effort_signs");
+    }
   }
 }
 
@@ -572,7 +619,137 @@ bool GraspExecutor::commandGripperDispatch(double opening_m,
   if (gripper_control_mode_ == "force") {
     return commandGripperForce(opening_m, gripper_force_n_, label);
   }
+  if (gripper_control_mode_ == "gazebo_force") {
+    if (label == "close") {
+      return commandGripperGazeboForce(gripper_force_n_, label);
+    }
+    return openGripperGazebo(opening_m, label);
+  }
   return commandGripper(opening_m, label);
+}
+
+bool GraspExecutor::switchGripperController(bool activate) {
+  if (!switch_controller_client_) {
+    return false;
+  }
+  if (!switch_controller_client_->service_is_ready() &&
+      !switch_controller_client_->wait_for_service(std::chrono::seconds(2))) {
+    RCLCPP_ERROR(get_logger(), "controller switch service unavailable");
+    return false;
+  }
+  auto request =
+      std::make_shared<controller_manager_msgs::srv::SwitchController::Request>();
+  if (activate) {
+    request->activate_controllers = {gripper_controller_name_};
+  } else {
+    request->deactivate_controllers = {gripper_controller_name_};
+  }
+  request->strictness =
+      controller_manager_msgs::srv::SwitchController::Request::BEST_EFFORT;
+  request->timeout.sec = 2;
+  auto future = switch_controller_client_->async_send_request(request);
+  if (!waitReady(future, 3.0)) {
+    RCLCPP_ERROR(get_logger(), "controller switch timeout");
+    return false;
+  }
+  const bool ok = future.get()->ok;
+  if (!ok) {
+    RCLCPP_WARN(get_logger(), "controller switch %s failed",
+                activate ? "activate" : "deactivate");
+  }
+  return ok;
+}
+
+bool GraspExecutor::applyJointEffort(const std::string &joint, double effort) {
+  if (!apply_effort_client_) {
+    return false;
+  }
+  if (!apply_effort_client_->service_is_ready() &&
+      !apply_effort_client_->wait_for_service(std::chrono::seconds(2))) {
+    RCLCPP_ERROR(get_logger(), "Gazebo apply_joint_effort service unavailable");
+    return false;
+  }
+  auto request = std::make_shared<gazebo_msgs::srv::ApplyJointEffort::Request>();
+  request->joint_name = joint;
+  request->effort = effort;
+  request->start_time.sec = 0;
+  request->start_time.nanosec = 0;
+  request->duration.sec = -1;  // apply continuously
+  request->duration.nanosec = 0;
+  auto future = apply_effort_client_->async_send_request(request);
+  if (!waitReady(future, 3.0)) {
+    RCLCPP_ERROR(get_logger(), "apply_joint_effort timeout for %s", joint.c_str());
+    return false;
+  }
+  const auto response = future.get();
+  if (!response->success) {
+    RCLCPP_ERROR(get_logger(), "apply_joint_effort failed for %s: %s",
+                 joint.c_str(), response->status_message.c_str());
+  }
+  return response->success;
+}
+
+bool GraspExecutor::clearJointEfforts() {
+  if (!clear_efforts_client_) {
+    return false;
+  }
+  if (!clear_efforts_client_->service_is_ready() &&
+      !clear_efforts_client_->wait_for_service(std::chrono::seconds(2))) {
+    RCLCPP_WARN(get_logger(), "Gazebo clear_joint_efforts service unavailable");
+    return false;
+  }
+  bool all_ok = true;
+  for (const auto &joint : gripper_joints_) {
+    auto request = std::make_shared<gazebo_msgs::srv::JointRequest::Request>();
+    request->joint_name = joint;
+    auto future = clear_efforts_client_->async_send_request(request);
+    if (!waitReady(future, 3.0)) {
+      RCLCPP_WARN(get_logger(), "clear_joint_efforts timeout for %s", joint.c_str());
+      all_ok = false;
+      continue;
+    }
+    future.get();  // response is empty; ready means the request was accepted
+  }
+  return all_ok;
+}
+
+bool GraspExecutor::commandGripperGazeboForce(double force_n,
+                                              const std::string &label) {
+  if (!switchGripperController(false)) {
+    RCLCPP_ERROR(get_logger(),
+                 "gripper %s: failed to deactivate position controller; "
+                 "constant-force close aborted",
+                 label.c_str());
+    return false;
+  }
+  for (std::size_t i = 0; i < gripper_joints_.size(); ++i) {
+    const double effort = gripper_effort_signs_[i] * force_n;
+    if (!applyJointEffort(gripper_joints_[i], effort)) {
+      RCLCPP_ERROR(get_logger(), "gripper %s: constant force failed on %s",
+                   label.c_str(), gripper_joints_[i].c_str());
+      clearJointEfforts();
+      switchGripperController(true);
+      return false;
+    }
+  }
+  RCLCPP_INFO(get_logger(),
+              "gripper %s (gazebo constant force): force=%.2fN joints=[%s, %s]",
+              label.c_str(), force_n, gripper_joints_[0].c_str(),
+              gripper_joints_[1].c_str());
+  std::this_thread::sleep_for(
+      std::chrono::duration<double>(std::max(0.0, gripper_settle_s_)));
+  return true;
+}
+
+bool GraspExecutor::openGripperGazebo(double width_m, const std::string &label) {
+  clearJointEfforts();
+  if (!switchGripperController(true)) {
+    RCLCPP_ERROR(get_logger(),
+                 "gripper %s: failed to reactivate position controller",
+                 label.c_str());
+    return false;
+  }
+  return commandGripper(width_m, label);
 }
 
 bool GraspExecutor::commandGripper(double opening_m, const std::string &label) {

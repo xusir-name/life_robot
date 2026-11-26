@@ -273,4 +273,4 @@ cd /home/xu/life_robot/drivers/agx_arm_ws && colcon build --symlink-install && s
 | 2026-11-25 | 标定结束回原位 | 启动记录初始位姿，成功/失败/异常退出均自动恢复 |
 | 2026-11-25 | 标定话题可配置 + 纯外参输出 | launch 可改全部话题/坐标系名；额外生成 `camera_tcp_extrinsics.yaml` |
 | 2026-11-25 | 新增仿真抓取应用（C++） | `graspnet_pick`：GraspCandidate/ExecuteGrasp 接口、服务触发抓取、手眼与候选朝向重试、夹空检测 |
-| 2026-11-26 | 抓取应用加力控/软闭合 | 位置模式闭爪到 `宽度 - squeeze` 不再夹 0；`force` 模式用 AgileX `/control/joint_states.effort` 力控 |
+| 2026-11-26 | 抓取应用加力控/软闭合 | 位置模式闭爪到 `宽度 - squeeze` 不再夹 0；`gazebo_force` 用 Gazebo 恒定力；`force` 用 AgileX `/control/joint_states.effort` |

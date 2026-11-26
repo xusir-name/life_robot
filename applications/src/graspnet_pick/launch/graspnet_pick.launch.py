@@ -110,6 +110,20 @@ def generate_launch_description():
         DeclareLaunchArgument(
             "gripper_force_topic", default_value="/control/joint_states"
         ),
+        DeclareLaunchArgument("gripper_effort_signs", default_value="-1.0,1.0"),
+        DeclareLaunchArgument(
+            "gazebo_apply_joint_effort_service", default_value="/apply_joint_effort"
+        ),
+        DeclareLaunchArgument(
+            "gazebo_clear_joint_efforts_service", default_value="/clear_joint_efforts"
+        ),
+        DeclareLaunchArgument(
+            "controller_switch_service",
+            default_value="/controller_manager/switch_controller",
+        ),
+        DeclareLaunchArgument(
+            "gripper_controller_name", default_value="gripper_controller"
+        ),
     ]
 
     estimator = Node(
@@ -200,6 +214,19 @@ def generate_launch_description():
                 "gripper_force_n": _f("gripper_force_n"),
                 "gripper_force_joint": LaunchConfiguration("gripper_force_joint"),
                 "gripper_force_topic": LaunchConfiguration("gripper_force_topic"),
+                "gripper_effort_signs": LaunchConfiguration("gripper_effort_signs"),
+                "gazebo_apply_joint_effort_service": LaunchConfiguration(
+                    "gazebo_apply_joint_effort_service"
+                ),
+                "gazebo_clear_joint_efforts_service": LaunchConfiguration(
+                    "gazebo_clear_joint_efforts_service"
+                ),
+                "controller_switch_service": LaunchConfiguration(
+                    "controller_switch_service"
+                ),
+                "gripper_controller_name": LaunchConfiguration(
+                    "gripper_controller_name"
+                ),
             }
         ],
     )

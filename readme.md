@@ -41,6 +41,7 @@
 | `ros-humble-vision-msgs` | 4.1.1 | 感知 2D/3D 检测消息候选 | `sudo apt install -y ros-humble-vision-msgs` | ✅ |
 | `ros-humble-realsense2-camera` | 4.58.4 | RealSense 驱动 | `sudo apt install -y ros-humble-realsense2-camera` | ✅ |
 | `ros-humble-controller-manager` | 2.54.4 | 控制器管理 | `sudo apt install -y ros-humble-controller-manager` | ✅ |
+| `ros-humble-gazebo-ros` | 3.9.0 | Gazebo ROS 服务（`/apply_joint_effort` 等） | `sudo apt install -y ros-humble-gazebo-ros` | ✅ |
 | `ros-humble-xacro` | 2.1.1 | URDF/xacro | `sudo apt install -y ros-humble-xacro` | ✅ |
 | `ros-humble-joint-state-publisher` | 2.4.0 | 关节状态发布 | `sudo apt install -y ros-humble-joint-state-publisher` | ✅ |
 | `ros-humble-robot-state-publisher` | 3.0.3 | TF/机器人模型 | `sudo apt install -y ros-humble-robot-state-publisher` | ✅ |
@@ -128,3 +129,4 @@
 | 2026-11-25 | 补手眼标定依赖 | `cv_bridge`、`python3-opencv`、`python3-yaml` |
 | 2026-11-25 | 精简 | 去重、压缩表格，规则收敛到 §1 |
 | 2026-11-25 | 补 C++ 抓取应用依赖 | `tf2_ros`、Eigen、yaml-cpp、OpenCV dev、gtest |
+| 2026-11-26 | 补 Gazebo 恒定力依赖 | `gazebo_ros`（`/apply_joint_effort`、`/clear_joint_efforts`） |

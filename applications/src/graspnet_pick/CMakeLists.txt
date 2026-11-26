@@ -20,6 +20,8 @@ find_package(std_msgs REQUIRED)
 find_package(trajectory_msgs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
+find_package(gazebo_msgs REQUIRED)
+find_package(controller_manager_msgs REQUIRED)
 find_package(cv_bridge REQUIRED)
 find_package(OpenCV REQUIRED)
 find_package(Eigen3 REQUIRED)
@@ -70,6 +72,8 @@ ament_target_dependencies(grasp_executor
   trajectory_msgs
   tf2
   tf2_ros
+  gazebo_msgs
+  controller_manager_msgs
 )
 
 install(TARGETS

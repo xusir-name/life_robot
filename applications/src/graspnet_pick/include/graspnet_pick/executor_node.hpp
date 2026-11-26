@@ -13,6 +13,9 @@
 #include <string>
 #include <vector>
 
+#include "controller_manager_msgs/srv/switch_controller.hpp"
+#include "gazebo_msgs/srv/apply_joint_effort.hpp"
+#include "gazebo_msgs/srv/joint_request.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "interfaces/msg/grasp_candidate.hpp"
 #include "interfaces/srv/execute_grasp.hpp"
@@ -49,6 +52,11 @@ class GraspExecutor : public rclcpp::Node {
   bool commandGripperForce(double width_m, double force_n,
                            const std::string &label);
   bool commandGripperDispatch(double opening_m, const std::string &label);
+  bool commandGripperGazeboForce(double force_n, const std::string &label);
+  bool openGripperGazebo(double width_m, const std::string &label);
+  bool switchGripperController(bool activate);
+  bool applyJointEffort(const std::string &joint, double effort);
+  bool clearJointEfforts();
   std::optional<double> gripperOpening();
   std::vector<Eigen::Matrix3d> orientationCandidates(
       const Eigen::Matrix3d &R_grasp, const Eigen::Matrix3d &R_current);
@@ -75,6 +83,11 @@ class GraspExecutor : public rclcpp::Node {
   double gripper_force_n_{1.5};
   std::string gripper_force_joint_;
   std::string gripper_force_topic_;
+  std::string gazebo_apply_joint_effort_service_;
+  std::string gazebo_clear_joint_efforts_service_;
+  std::string controller_switch_service_;
+  std::string gripper_controller_name_;
+  std::vector<double> gripper_effort_signs_;
 
   // execution parameters
   double max_candidate_age_s_{3.0};
@@ -112,6 +125,10 @@ class GraspExecutor : public rclcpp::Node {
   rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr motion_pub_;
   rclcpp::Publisher<trajectory_msgs::msg::JointTrajectory>::SharedPtr gripper_pub_;
   rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr gripper_force_pub_;
+  rclcpp::Client<gazebo_msgs::srv::ApplyJointEffort>::SharedPtr apply_effort_client_;
+  rclcpp::Client<gazebo_msgs::srv::JointRequest>::SharedPtr clear_efforts_client_;
+  rclcpp::Client<controller_manager_msgs::srv::SwitchController>::SharedPtr
+      switch_controller_client_;
   rclcpp::Subscription<interfaces::msg::GraspCandidate>::SharedPtr candidate_sub_;
   rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr tcp_sub_;
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr motion_status_sub_;

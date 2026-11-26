@@ -58,8 +58,10 @@
 - 为打通“检测框 → 抓取位姿 → 机械臂执行”链路，允许应用包内以**纯函数**实现抓取位姿估计，
   并通过仿真 `/target_pose` 桥接运动；实现与参数必须可单测、README 标注迁移目标。
 - 仍**不得发布 `/control/*`**；真机前必须迁移到 L3（感知）与 L6（运动 action）。
-- **临时例外**：`graspnet_pick` 的 `force` 模式可直接向 `/control/joint_states` 发送
-  夹爪 `position` + `effort`，使用 AgileX 驱动内置力控；仅用于当前真机联调，正式运行必须迁到 L6。
+- **临时例外**：`graspnet_pick` 的 `gazebo_force` 模式在仿真中停用夹爪位置控制器，
+  直接用 Gazebo `/apply_joint_effort` 施加恒定力；`force` 模式可向 `/control/joint_states`
+  发送夹爪 `position` + `effort`，使用 AgileX 驱动内置力控。仅用于当前仿真/真机联调，
+  正式运行必须迁到 L6。
 - 当前实例：[`applications/src/graspnet_pick`](../../applications/src/graspnet_pick/README.md)。
 
 ## 越界
