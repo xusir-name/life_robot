@@ -46,6 +46,9 @@ class GraspExecutor : public rclcpp::Node {
   bool moveTo(const Eigen::Matrix4d &T_base_ee, const std::string &label,
               double timeout_s);
   bool commandGripper(double opening_m, const std::string &label);
+  bool commandGripperForce(double width_m, double force_n,
+                           const std::string &label);
+  bool commandGripperDispatch(double opening_m, const std::string &label);
   std::optional<double> gripperOpening();
   std::vector<Eigen::Matrix3d> orientationCandidates(
       const Eigen::Matrix3d &R_grasp, const Eigen::Matrix3d &R_current);
@@ -67,6 +70,11 @@ class GraspExecutor : public rclcpp::Node {
   std::string gripper_topic_;
   std::vector<std::string> gripper_joints_;
   std::string joint_states_topic_;
+  std::string gripper_control_mode_;
+  double gripper_close_squeeze_m_{0.002};
+  double gripper_force_n_{1.5};
+  std::string gripper_force_joint_;
+  std::string gripper_force_topic_;
 
   // execution parameters
   double max_candidate_age_s_{3.0};
@@ -103,6 +111,7 @@ class GraspExecutor : public rclcpp::Node {
 
   rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr motion_pub_;
   rclcpp::Publisher<trajectory_msgs::msg::JointTrajectory>::SharedPtr gripper_pub_;
+  rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr gripper_force_pub_;
   rclcpp::Subscription<interfaces::msg::GraspCandidate>::SharedPtr candidate_sub_;
   rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr tcp_sub_;
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr motion_status_sub_;

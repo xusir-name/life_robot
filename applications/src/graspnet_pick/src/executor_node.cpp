@@ -67,6 +67,15 @@ GraspExecutor::GraspExecutor(const rclcpp::NodeOptions &options)
       "gripper_joints", "gripper_joint1,gripper_joint2"));
   joint_states_topic_ =
       declare_parameter<std::string>("joint_states_topic", "/joint_states");
+  gripper_control_mode_ =
+      declare_parameter<std::string>("gripper_control_mode", "position");
+  gripper_close_squeeze_m_ =
+      declare_parameter<double>("gripper_close_squeeze_m", 0.002);
+  gripper_force_n_ = declare_parameter<double>("gripper_force_n", 1.5);
+  gripper_force_joint_ =
+      declare_parameter<std::string>("gripper_force_joint", "gripper");
+  gripper_force_topic_ =
+      declare_parameter<std::string>("gripper_force_topic", "/control/joint_states");
 
   max_candidate_age_s_ = declare_parameter<double>("max_candidate_age_s", 3.0);
   max_stamp_diff_s_ = declare_parameter<double>("max_stamp_diff_s", 0.15);
@@ -111,6 +120,8 @@ GraspExecutor::GraspExecutor(const rclcpp::NodeOptions &options)
       motion_topic_, rclcpp::QoS(10));
   gripper_pub_ = create_publisher<trajectory_msgs::msg::JointTrajectory>(
       gripper_topic_, rclcpp::QoS(10));
+  gripper_force_pub_ = create_publisher<sensor_msgs::msg::JointState>(
+      gripper_force_topic_, rclcpp::QoS(10));
   candidate_sub_ = create_subscription<interfaces::msg::GraspCandidate>(
       candidate_topic_, rclcpp::QoS(10),
       std::bind(&GraspExecutor::onCandidate, this, std::placeholders::_1),
@@ -177,6 +188,18 @@ void GraspExecutor::validateParams() const {
         "gripper_settle_s must be >= gripper_move_time_s; otherwise joint "
         "feedback is read before the gripper stops");
   }
+  if (gripper_control_mode_ != "position" && gripper_control_mode_ != "force") {
+    throw std::invalid_argument(
+        "gripper_control_mode must be 'position' or 'force'");
+  }
+  if (gripper_close_squeeze_m_ < 0.0) {
+    throw std::invalid_argument("gripper_close_squeeze_m must be >= 0");
+  }
+  if (gripper_control_mode_ == "force" &&
+      (gripper_force_n_ < 0.5 || gripper_force_n_ > 3.0)) {
+    throw std::invalid_argument(
+        "gripper_force_n must be in [0.5, 3.0] N for AgileX force control");
+  }
 }
 
 Eigen::Matrix4d GraspExecutor::lookupEeTcp() {
@@ -233,7 +256,8 @@ void GraspExecutor::onJointStates(
   std::lock_guard<std::mutex> lock(state_mutex_);
   for (std::size_t i = 0; i < msg->name.size() && i < msg->position.size(); ++i) {
     if (std::find(gripper_joints_.begin(), gripper_joints_.end(), msg->name[i]) !=
-        gripper_joints_.end()) {
+            gripper_joints_.end() ||
+        msg->name[i] == gripper_force_joint_) {
       joint_positions_[msg->name[i]] = msg->position[i];
     }
   }
@@ -358,7 +382,7 @@ void GraspExecutor::execute(const ExecuteGrasp::Request &request,
               "tcp_dt=%.3fs age=%.3fs",
               candidate->score, width * 1000.0, open_width * 1000.0, tcp_dt, age);
 
-  if (!commandGripper(open_width, "open")) {
+  if (!commandGripperDispatch(open_width, "open")) {
     fail(response, ExecuteGrasp::Response::ERROR_GRIPPER,
          "failed to command gripper open");
     return;
@@ -397,7 +421,7 @@ void GraspExecutor::execute(const ExecuteGrasp::Request &request,
   }
 
   if (!chosen_tcp.has_value()) {
-    commandGripper(open_width, "safe-open");
+    commandGripperDispatch(open_width, "safe-open");
     fail(response, ExecuteGrasp::Response::ERROR_MOTION,
          "pregrasp motion failed for all orientation candidates");
     return;
@@ -406,12 +430,14 @@ void GraspExecutor::execute(const ExecuteGrasp::Request &request,
   const Eigen::Matrix4d T_base_ee_grasp =
       *chosen_tcp * invertTransform(T_ee_tcp_);
   if (!moveTo(T_base_ee_grasp, "grasp", timeout)) {
-    commandGripper(open_width, "safe-open");
+    commandGripperDispatch(open_width, "safe-open");
     fail(response, ExecuteGrasp::Response::ERROR_MOTION,
          "grasp motion failed or timed out");
     return;
   }
-  if (!commandGripper(0.0, "close")) {
+  const double close_width =
+      std::max(0.0, width - gripper_close_squeeze_m_);
+  if (!commandGripperDispatch(close_width, "close")) {
     fail(response, ExecuteGrasp::Response::ERROR_GRIPPER,
          "failed to command gripper close");
     return;
@@ -424,7 +450,7 @@ void GraspExecutor::execute(const ExecuteGrasp::Request &request,
   if (opening.has_value() && *opening < min_grasp_opening_m_) {
     std::ostringstream ss;
     ss << "gripper closed empty (opening=" << *opening * 1000.0 << "mm)";
-    commandGripper(open_width, "safe-open");
+    commandGripperDispatch(open_width, "safe-open");
     fail(response, ExecuteGrasp::Response::ERROR_GRIPPER, ss.str());
     return;
   }
@@ -525,6 +551,30 @@ bool GraspExecutor::moveTo(const Eigen::Matrix4d &T_base_ee,
   return true;
 }
 
+bool GraspExecutor::commandGripperForce(double width_m, double force_n,
+                                        const std::string &label) {
+  sensor_msgs::msg::JointState msg;
+  msg.header.stamp = now();
+  msg.name = {gripper_force_joint_};
+  msg.position = {width_m};
+  msg.effort = {force_n};
+  gripper_force_pub_->publish(msg);
+  RCLCPP_INFO(get_logger(),
+              "gripper %s (force mode): width=%.1fmm force=%.2fN",
+              label.c_str(), width_m * 1000.0, force_n);
+  std::this_thread::sleep_for(
+      std::chrono::duration<double>(std::max(0.0, gripper_settle_s_)));
+  return true;
+}
+
+bool GraspExecutor::commandGripperDispatch(double opening_m,
+                                           const std::string &label) {
+  if (gripper_control_mode_ == "force") {
+    return commandGripperForce(opening_m, gripper_force_n_, label);
+  }
+  return commandGripper(opening_m, label);
+}
+
 bool GraspExecutor::commandGripper(double opening_m, const std::string &label) {
   const double opening =
       std::clamp(opening_m, 0.0, gripper_max_opening_m_);
@@ -555,6 +605,15 @@ bool GraspExecutor::commandGripper(double opening_m, const std::string &label) {
 
 std::optional<double> GraspExecutor::gripperOpening() {
   std::lock_guard<std::mutex> lock(state_mutex_);
+  if (gripper_control_mode_ == "force") {
+    const auto it = joint_positions_.find(gripper_force_joint_);
+    if (it == joint_positions_.end()) {
+      RCLCPP_WARN(get_logger(),
+                  "force-mode gripper feedback unavailable; skip verification");
+      return std::nullopt;
+    }
+    return std::abs(it->second);
+  }
   std::vector<double> values;
   for (const auto &name : gripper_joints_) {
     const auto it = joint_positions_.find(name);

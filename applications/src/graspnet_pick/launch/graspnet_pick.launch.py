@@ -103,6 +103,13 @@ def generate_launch_description():
         DeclareLaunchArgument("min_grasp_opening_m", default_value="0.005"),
         DeclareLaunchArgument("prefer_vertical_approach", default_value="true"),
         DeclareLaunchArgument("joint_states_topic", default_value="/joint_states"),
+        DeclareLaunchArgument("gripper_control_mode", default_value="position"),
+        DeclareLaunchArgument("gripper_close_squeeze_m", default_value="0.002"),
+        DeclareLaunchArgument("gripper_force_n", default_value="1.5"),
+        DeclareLaunchArgument("gripper_force_joint", default_value="gripper"),
+        DeclareLaunchArgument(
+            "gripper_force_topic", default_value="/control/joint_states"
+        ),
     ]
 
     estimator = Node(
@@ -188,6 +195,11 @@ def generate_launch_description():
                 "min_grasp_opening_m": _f("min_grasp_opening_m"),
                 "prefer_vertical_approach": _b("prefer_vertical_approach"),
                 "joint_states_topic": LaunchConfiguration("joint_states_topic"),
+                "gripper_control_mode": LaunchConfiguration("gripper_control_mode"),
+                "gripper_close_squeeze_m": _f("gripper_close_squeeze_m"),
+                "gripper_force_n": _f("gripper_force_n"),
+                "gripper_force_joint": LaunchConfiguration("gripper_force_joint"),
+                "gripper_force_topic": LaunchConfiguration("gripper_force_topic"),
             }
         ],
     )
