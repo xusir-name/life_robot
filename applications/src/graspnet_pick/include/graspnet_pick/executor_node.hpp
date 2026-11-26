@@ -59,6 +59,7 @@ class GraspExecutor : public rclcpp::Node {
   bool commandGripperGazeboForce(double force_n, const std::string &label);
   bool openGripperGazebo(double width_m, const std::string &label);
   uint8_t recenterTarget(std::string &message);
+  bool waitForFreshCandidate(const rclcpp::Time &since, double timeout_s);
   bool switchGripperController(bool activate);
   bool applyJointEffort(const std::string &joint, double effort);
   bool clearJointEfforts();
@@ -85,10 +86,14 @@ class GraspExecutor : public rclcpp::Node {
   std::string joint_states_topic_;
   std::string set_observation_pose_service_name_;
   bool recenter_enabled_{true};
-  double recenter_tolerance_m_{0.005};
-  double recenter_max_step_m_{0.05};
+  double recenter_tolerance_m_{0.01};
+  double recenter_max_step_m_{0.1};
   int recenter_max_iterations_{3};
-  double recenter_settle_s_{0.8};
+  double recenter_settle_s_{0.3};
+  double recenter_gain_{0.8};
+  double preferred_approach_tilt_deg_{15.0};
+  double observation_move_tolerance_m_{0.01};
+  double observation_move_tolerance_rad_{0.1};
   std::string gripper_control_mode_;
   double gripper_close_squeeze_m_{0.002};
   double gripper_force_n_{1.5};

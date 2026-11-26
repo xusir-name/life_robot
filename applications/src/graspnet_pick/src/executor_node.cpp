@@ -92,11 +92,18 @@ GraspExecutor::GraspExecutor(const rclcpp::NodeOptions &options)
       "set_observation_pose_service", "/grasp/set_observation_pose");
   recenter_enabled_ = declare_parameter<bool>("recenter_enabled", true);
   recenter_tolerance_m_ =
-      declare_parameter<double>("recenter_tolerance_m", 0.005);
-  recenter_max_step_m_ = declare_parameter<double>("recenter_max_step_m", 0.05);
+      declare_parameter<double>("recenter_tolerance_m", 0.01);
+  recenter_max_step_m_ = declare_parameter<double>("recenter_max_step_m", 0.1);
   recenter_max_iterations_ =
-      declare_parameter<int>("recenter_max_iterations", 3);
-  recenter_settle_s_ = declare_parameter<double>("recenter_settle_s", 0.8);
+      declare_parameter<int>("recenter_max_iterations", 2);
+  recenter_settle_s_ = declare_parameter<double>("recenter_settle_s", 0.3);
+  recenter_gain_ = declare_parameter<double>("recenter_gain", 0.8);
+  preferred_approach_tilt_deg_ =
+      declare_parameter<double>("preferred_approach_tilt_deg", 15.0);
+  observation_move_tolerance_m_ =
+      declare_parameter<double>("observation_move_tolerance_m", 0.01);
+  observation_move_tolerance_rad_ =
+      declare_parameter<double>("observation_move_tolerance_rad", 0.1);
   gripper_control_mode_ =
       declare_parameter<std::string>("gripper_control_mode", "position");
   gripper_close_squeeze_m_ =
@@ -121,7 +128,7 @@ GraspExecutor::GraspExecutor(const rclcpp::NodeOptions &options)
   max_stamp_diff_s_ = declare_parameter<double>("max_stamp_diff_s", 0.15);
   motion_timeout_s_ = declare_parameter<double>("motion_timeout_s", 30.0);
   tf_timeout_s_ = declare_parameter<double>("tf_timeout_s", 10.0);
-  settle_time_s_ = declare_parameter<double>("settle_time_s", 0.4);
+  settle_time_s_ = declare_parameter<double>("settle_time_s", 0.2);
   finger_length_m_ = declare_parameter<double>("finger_length_m", 0.0);
   declare_parameter<double>("grasp_height_offset_m", 0.0);
   pregrasp_distance_m_ = declare_parameter<double>("pregrasp_distance_m", 0.08);
@@ -134,7 +141,7 @@ GraspExecutor::GraspExecutor(const rclcpp::NodeOptions &options)
   gripper_joint_limit_m_ =
       declare_parameter<double>("gripper_joint_limit_m", 0.05);
   gripper_move_time_s_ = declare_parameter<double>("gripper_move_time_s", 1.0);
-  gripper_settle_s_ = declare_parameter<double>("gripper_settle_s", 1.5);
+  gripper_settle_s_ = declare_parameter<double>("gripper_settle_s", 1.1);
   min_grasp_opening_m_ =
       declare_parameter<double>("min_grasp_opening_m", 0.005);
   prefer_vertical_approach_ =
@@ -400,15 +407,38 @@ void GraspExecutor::execute(const ExecuteGrasp::Request &request,
       request.timeout_s > 0.0f ? request.timeout_s : motion_timeout_s_;
 
   if (observation.has_value()) {
-    const Eigen::Matrix4d T_obs_ee =
-        *observation * invertTransform(T_ee_tcp_);
-    if (!moveTo(T_obs_ee, "observation", timeout)) {
-      fail(response, ExecuteGrasp::Response::ERROR_MOTION,
-           "failed to move to observation pose");
-      return;
+    bool already_there = false;
+    {
+      std::lock_guard<std::mutex> lock(state_mutex_);
+      if (!tcp_buffer_.empty()) {
+        try {
+          const Eigen::Matrix4d T_cur = poseMsgToMatrix(tcp_buffer_.back().pose);
+          const double pos_err =
+              (T_cur.block<3, 1>(0, 3) - observation->block<3, 1>(0, 3)).norm();
+          const double rot_err =
+              rotationAngle(T_cur.block<3, 3>(0, 0), observation->block<3, 3>(0, 0));
+          already_there = pos_err <= observation_move_tolerance_m_ &&
+                          rot_err <= observation_move_tolerance_rad_;
+        } catch (const std::exception &) {
+          already_there = false;
+        }
+      }
     }
-    std::this_thread::sleep_for(
-        std::chrono::duration<double>(std::max(0.0, recenter_settle_s_)));
+    if (already_there) {
+      RCLCPP_INFO(get_logger(), "already near observation pose; skip observation move");
+    } else {
+      const Eigen::Matrix4d T_obs_ee =
+          *observation * invertTransform(T_ee_tcp_);
+      const rclcpp::Time obs_started = now();
+      if (!moveTo(T_obs_ee, "observation", timeout)) {
+        fail(response, ExecuteGrasp::Response::ERROR_MOTION,
+             "failed to move to observation pose");
+        return;
+      }
+      std::this_thread::sleep_for(
+          std::chrono::duration<double>(std::max(0.0, recenter_settle_s_)));
+      waitForFreshCandidate(obs_started, 1.5);
+    }
   }
 
   if (recenter_enabled_) {
@@ -500,7 +530,11 @@ void GraspExecutor::execute(const ExecuteGrasp::Request &request,
               "tcp_dt=%.3fs age=%.3fs",
               candidate->score, width * 1000.0, open_width * 1000.0, tcp_dt, age);
 
-  if (!commandGripperDispatch(open_width, "open")) {
+  const auto current_opening = gripperOpening();
+  if (current_opening.has_value() && *current_opening >= open_width - 0.005) {
+    RCLCPP_INFO(get_logger(), "gripper already open (%.1fmm); skip open",
+                *current_opening * 1000.0);
+  } else if (!commandGripperDispatch(open_width, "open")) {
     fail(response, ExecuteGrasp::Response::ERROR_GRIPPER,
          "failed to command gripper open");
     return;
@@ -723,6 +757,26 @@ bool GraspExecutor::commandGripperDispatch(double opening_m,
   return commandGripper(opening_m, label);
 }
 
+bool GraspExecutor::waitForFreshCandidate(const rclcpp::Time &since,
+                                           double timeout_s) {
+  const auto deadline =
+      std::chrono::steady_clock::now() + std::chrono::duration<double>(timeout_s);
+  while (rclcpp::ok() && std::chrono::steady_clock::now() < deadline) {
+    {
+      std::lock_guard<std::mutex> lock(state_mutex_);
+      if (candidate_.has_value()) {
+        const rclcpp::Time stamp(candidate_->header.stamp,
+                                 get_clock()->get_clock_type());
+        if (stamp.nanoseconds() != 0 && stamp >= since) {
+          return true;
+        }
+      }
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+  }
+  return false;
+}
+
 uint8_t GraspExecutor::recenterTarget(std::string &message) {
   for (int iter = 0; iter < recenter_max_iterations_; ++iter) {
     std::optional<interfaces::msg::GraspCandidate> candidate;
@@ -759,6 +813,7 @@ uint8_t GraspExecutor::recenterTarget(std::string &message) {
     }
 
     Eigen::Vector3d delta_cam(p_cam.x(), p_cam.y(), 0.0);
+    delta_cam *= std::clamp(recenter_gain_, 0.0, 1.0);
     if (delta_cam.norm() > recenter_max_step_m_) {
       delta_cam *= recenter_max_step_m_ / delta_cam.norm();
     }
@@ -774,12 +829,14 @@ uint8_t GraspExecutor::recenterTarget(std::string &message) {
                 "recenter[%d]: image error=%.1fmm, move camera by "
                 "[%.3f, %.3f, 0]m",
                 iter, error.norm() * 1000.0, p_cam.x(), p_cam.y());
+    const rclcpp::Time move_started = now();
     if (!moveTo(T_base_ee_next, label.str(), motion_timeout_s_)) {
       message = "recenter motion failed";
       return ExecuteGrasp::Response::ERROR_MOTION;
     }
     std::this_thread::sleep_for(
         std::chrono::duration<double>(std::max(0.0, recenter_settle_s_)));
+    waitForFreshCandidate(move_started, 1.5);
   }
   RCLCPP_WARN(get_logger(),
               "recenter reached max iterations; continue with latest candidate");
@@ -998,7 +1055,12 @@ std::vector<Eigen::Matrix3d> GraspExecutor::orientationCandidates(
   // 优先“夹爪朝下”：先纯垂直，再向 +X 倾斜 5/10/15/30/45°。
   // 每个倾角先试物体 OBB 的闭合轴，再试当前腕部偏航。
   if (prefer_vertical_approach_) {
-    const std::vector<double> tilts_deg{0.0, 5.0, 10.0, 15.0, 30.0, 45.0};
+    std::vector<double> tilts_deg{preferred_approach_tilt_deg_};
+    for (double tilt : {0.0, 5.0, 10.0, 15.0, 30.0, 45.0}) {
+      if (std::abs(tilt - preferred_approach_tilt_deg_) > 1e-6) {
+        tilts_deg.push_back(tilt);
+      }
+    }
     const std::vector<Eigen::Vector3d> closings{
         R_grasp.col(1), R_current.col(1), R_current.col(0),
         Eigen::Vector3d(1.0, 0.0, 0.0), Eigen::Vector3d(0.0, 1.0, 0.0)};

@@ -189,16 +189,18 @@ ros2 launch graspnet_pick graspnet_pick.launch.py \
 | `gripper_controller_name` | `gripper_controller` | 仿真位置控制器名 |
 | `gripper_max_opening_m` | `0.095` | 夹爪最大开口 |
 | `gripper_joint_limit_m` | `0.05` | 单指行程（仿真 prismatic） |
-| `gripper_settle_s` | `1.5` | 必须大于 `gripper_move_time_s`，否则会在夹爪未闭合时就读反馈 |
+| `gripper_settle_s` | `1.1` | 必须大于 `gripper_move_time_s`，否则会在夹爪未闭合时就读反馈 |
 | `min_grasp_opening_m` | `0.005` | 闭爪后小于此视为夹空 |
 | `prefer_vertical_approach` | `true` | 优先夹爪朝下：0/15/30/45° 下压，失败后才退回候选/水平侧抓 |
 | `grasp_height_offset_m` | `0.0` | 抓取点沿基座 +Z 的额外偏移；接触点偏低时向上调 |
 | `set_observation_pose_service` | `/grasp/set_observation_pose` | 记录观察位姿的 Trigger 服务 |
 | `recenter_enabled` | `true` | 执行前是否自动把目标移到相机中心 |
-| `recenter_tolerance_m` | `0.005` | 居中容差（相机系 x/y） |
-| `recenter_max_step_m` | `0.05` | 单次居中最大平移 |
-| `recenter_max_iterations` | `3` | 最多居中次数 |
-| `recenter_settle_s` | `0.8` | 每次居中/观察位姿后等待新图像 |
+| `recenter_tolerance_m` | `0.01` | 居中容差（相机系 x/y） |
+| `recenter_max_step_m` | `0.1` | 单次居中最大平移 |
+| `recenter_max_iterations` | `2` | 最多居中次数（默认 2 次，避免反复移动拖慢响应） |
+| `recenter_settle_s` | `0.3` | 每次居中/观察位姿后等待新图像 |
+| `observation_move_tolerance_m` | `0.01` | 距观察位姿小于此值时跳过回位 |
+| `observation_move_tolerance_rad` | `0.1` | 姿态误差小于此值时跳过回位 |
 
 ## 安全与边界
 
