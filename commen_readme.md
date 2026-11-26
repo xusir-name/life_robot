@@ -278,3 +278,4 @@ cd /home/xu/life_robot/drivers/agx_arm_ws && colcon build --symlink-install && s
 | 2026-11-26 | 抓取防滑落 | 恒力默认 2.0N；先纯竖直抬起并检测滑落；仿真 `arm_sim` 摩擦系数调到 5.0 |
 | 2026-11-26 | 观察位姿 + 自动居中 | `/grasp/set_observation_pose` 记录 TCP；执行前回位并最多 3 次把目标移到相机中心 |
 | 2026-11-26 | 抓取响应加速 | 近观察位跳过；居中默认 2 次/增益 0.8；首选 15°；缩短移动/夹爪等待 |
+| 2026-11-26 | 合爪后等接触 | 到抓取位姿先等 `grasp_settle_s`；合爪后等开口稳定再抬升 |

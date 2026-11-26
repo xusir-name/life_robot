@@ -114,6 +114,12 @@ def generate_launch_description():
         DeclareLaunchArgument("observation_move_tolerance_rad", default_value="0.1"),
         DeclareLaunchArgument("recenter_settle_s", default_value="0.3"),
         DeclareLaunchArgument("recenter_gain", default_value="0.8"),
+        DeclareLaunchArgument("grasp_settle_s", default_value="0.6"),
+        DeclareLaunchArgument("grasp_hold_before_lift_s", default_value="0.4"),
+        DeclareLaunchArgument("grasp_contact_timeout_s", default_value="2.0"),
+        DeclareLaunchArgument("grasp_contact_stable_delta_m", default_value="0.001"),
+        DeclareLaunchArgument("grasp_contact_stable_time_s", default_value="0.2"),
+        DeclareLaunchArgument("grasp_contact_min_close_m", default_value="0.01"),
         DeclareLaunchArgument(
             "preferred_approach_tilt_deg", default_value="15.0"
         ),
@@ -232,6 +238,18 @@ def generate_launch_description():
                 "recenter_max_iterations": _i("recenter_max_iterations"),
                 "recenter_settle_s": _f("recenter_settle_s"),
                 "recenter_gain": _f("recenter_gain"),
+                "grasp_settle_s": _f("grasp_settle_s"),
+                "grasp_hold_before_lift_s": _f("grasp_hold_before_lift_s"),
+                "grasp_contact_timeout_s": _f("grasp_contact_timeout_s"),
+                "grasp_contact_stable_delta_m": _f(
+                    "grasp_contact_stable_delta_m"
+                ),
+                "grasp_contact_stable_time_s": _f(
+                    "grasp_contact_stable_time_s"
+                ),
+                "grasp_contact_min_close_m": _f(
+                    "grasp_contact_min_close_m"
+                ),
                 "preferred_approach_tilt_deg": _f(
                     "preferred_approach_tilt_deg"
                 ),

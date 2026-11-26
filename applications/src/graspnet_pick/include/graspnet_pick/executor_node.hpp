@@ -57,6 +57,7 @@ class GraspExecutor : public rclcpp::Node {
                            const std::string &label);
   bool commandGripperDispatch(double opening_m, const std::string &label);
   bool commandGripperGazeboForce(double force_n, const std::string &label);
+  bool waitGripperContact(double open_width_m, double timeout_s);
   bool openGripperGazebo(double width_m, const std::string &label);
   uint8_t recenterTarget(std::string &message);
   bool waitForFreshCandidate(const rclcpp::Time &since, double timeout_s);
@@ -91,6 +92,12 @@ class GraspExecutor : public rclcpp::Node {
   int recenter_max_iterations_{3};
   double recenter_settle_s_{0.3};
   double recenter_gain_{0.8};
+  double grasp_settle_s_{0.6};
+  double grasp_hold_before_lift_s_{0.4};
+  double grasp_contact_timeout_s_{2.0};
+  double grasp_contact_stable_delta_m_{0.001};
+  double grasp_contact_stable_time_s_{0.2};
+  double grasp_contact_min_close_m_{0.01};
   double preferred_approach_tilt_deg_{15.0};
   double observation_move_tolerance_m_{0.01};
   double observation_move_tolerance_rad_{0.1};

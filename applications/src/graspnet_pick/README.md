@@ -190,6 +190,12 @@ ros2 launch graspnet_pick graspnet_pick.launch.py \
 | `gripper_max_opening_m` | `0.095` | 夹爪最大开口 |
 | `gripper_joint_limit_m` | `0.05` | 单指行程（仿真 prismatic） |
 | `gripper_settle_s` | `1.1` | 必须大于 `gripper_move_time_s`，否则会在夹爪未闭合时就读反馈 |
+| `grasp_settle_s` | `0.6` | 到达抓取位姿后、合爪前的稳定等待 |
+| `grasp_hold_before_lift_s` | `0.4` | 夹爪夹稳后再等多久才抬升 |
+| `grasp_contact_timeout_s` | `2.0` | 等待夹爪开口稳定的最长时间 |
+| `grasp_contact_stable_delta_m` | `0.001` | 开口变化小于此值视为稳定 |
+| `grasp_contact_stable_time_s` | `0.2` | 稳定持续时间 |
+| `grasp_contact_min_close_m` | `0.01` | 开口至少比初始开口小这么多才认为开始接触 |
 | `min_grasp_opening_m` | `0.005` | 闭爪后小于此视为夹空 |
 | `prefer_vertical_approach` | `true` | 优先夹爪朝下：0/15/30/45° 下压，失败后才退回候选/水平侧抓 |
 | `grasp_height_offset_m` | `0.0` | 抓取点沿基座 +Z 的额外偏移；接触点偏低时向上调 |
@@ -218,6 +224,8 @@ ros2 launch graspnet_pick graspnet_pick.launch.py \
   候选朝向 → 当前腕姿 → 水平侧抓”顺序重试；优先夹爪朝下，避免大夹爪水平进入顶到突台。
   全部失败时开爪并返回 `ERROR_MOTION`。
 - 闭爪后读 `/joint_states`，开口 < `min_grasp_opening_m` 判定夹空并开爪返回失败。
+- 到达抓取位姿后先等 `grasp_settle_s`，再合爪；合爪后轮询开口，等它稳定
+  `grasp_contact_stable_time_s` 才抬升，避免夹爪还没碰到物体就抬。
 - 抓取后先**纯竖直抬起** `lift_height_m`，抬起后再次检查开口；开口变小判定滑落并返回失败。
 - 服务阻塞期间用多线程执行器保证 TCP/状态回调继续运行；同一时间只允许一个抓取。
 - 没有碰撞场景注入、没有力控/滑移检测；真机前需接 L6 + 力矩/夹爪反馈。

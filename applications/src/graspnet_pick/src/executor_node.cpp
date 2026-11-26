@@ -98,6 +98,17 @@ GraspExecutor::GraspExecutor(const rclcpp::NodeOptions &options)
       declare_parameter<int>("recenter_max_iterations", 2);
   recenter_settle_s_ = declare_parameter<double>("recenter_settle_s", 0.3);
   recenter_gain_ = declare_parameter<double>("recenter_gain", 0.8);
+  grasp_settle_s_ = declare_parameter<double>("grasp_settle_s", 0.6);
+  grasp_hold_before_lift_s_ =
+      declare_parameter<double>("grasp_hold_before_lift_s", 0.4);
+  grasp_contact_timeout_s_ =
+      declare_parameter<double>("grasp_contact_timeout_s", 2.0);
+  grasp_contact_stable_delta_m_ =
+      declare_parameter<double>("grasp_contact_stable_delta_m", 0.001);
+  grasp_contact_stable_time_s_ =
+      declare_parameter<double>("grasp_contact_stable_time_s", 0.2);
+  grasp_contact_min_close_m_ =
+      declare_parameter<double>("grasp_contact_min_close_m", 0.01);
   preferred_approach_tilt_deg_ =
       declare_parameter<double>("preferred_approach_tilt_deg", 15.0);
   observation_move_tolerance_m_ =
@@ -587,6 +598,9 @@ void GraspExecutor::execute(const ExecuteGrasp::Request &request,
          "grasp motion failed or timed out");
     return;
   }
+  // 到达抓取位姿后不要立刻合爪，等臂/腕稳定一下。
+  std::this_thread::sleep_for(
+      std::chrono::duration<double>(std::max(0.0, grasp_settle_s_)));
   const double close_width =
       std::max(0.0, width - gripper_close_squeeze_m_);
   if (!commandGripperDispatch(close_width, "close")) {
@@ -606,6 +620,16 @@ void GraspExecutor::execute(const ExecuteGrasp::Request &request,
     fail(response, ExecuteGrasp::Response::ERROR_GRIPPER, ss.str());
     return;
   }
+
+  // 等夹爪真正夹稳（开口不再变化）再抬，避免刚合爪就抬升。
+  if (!waitGripperContact(open_width, grasp_contact_timeout_s_)) {
+    commandGripperDispatch(open_width, "safe-open");
+    fail(response, ExecuteGrasp::Response::ERROR_GRIPPER,
+         "gripper did not settle on object before lift");
+    return;
+  }
+  std::this_thread::sleep_for(
+      std::chrono::duration<double>(std::max(0.0, grasp_hold_before_lift_s_)));
 
   // 先纯竖直抬起，确认没有滑落，再沿抓取反方向后退。
   Eigen::Matrix4d T_base_tcp_lift = *chosen_tcp;
@@ -926,6 +950,55 @@ bool GraspExecutor::clearJointEfforts() {
     future.get();  // response is empty; ready means the request was accepted
   }
   return all_ok;
+}
+
+bool GraspExecutor::waitGripperContact(double open_width_m, double timeout_s) {
+  const auto deadline =
+      std::chrono::steady_clock::now() + std::chrono::duration<double>(timeout_s);
+  std::optional<double> last_opening;
+  auto stable_since = std::chrono::steady_clock::now();
+  bool has_feedback = false;
+  while (rclcpp::ok() && std::chrono::steady_clock::now() < deadline) {
+    const auto opening = gripperOpening();
+    if (!opening.has_value()) {
+      // 没有关节反馈时退化为固定等待
+      std::this_thread::sleep_for(
+          std::chrono::duration<double>(std::max(0.0, grasp_hold_before_lift_s_)));
+      return true;
+    }
+    has_feedback = true;
+    if (*opening > open_width_m - grasp_contact_min_close_m_) {
+      // 还没明显闭合（例如恒力没生效/夹爪被控制器顶住），继续等。
+      last_opening.reset();
+      stable_since = std::chrono::steady_clock::now();
+      std::this_thread::sleep_for(std::chrono::milliseconds(50));
+      continue;
+    }
+    if (*opening < min_grasp_opening_m_) {
+      RCLCPP_ERROR(get_logger(),
+                   "gripper contact wait: closed empty (opening=%.1fmm)",
+                   *opening * 1000.0);
+      return false;
+    }
+    if (!last_opening.has_value() ||
+        std::abs(*opening - *last_opening) > grasp_contact_stable_delta_m_) {
+      last_opening = *opening;
+      stable_since = std::chrono::steady_clock::now();
+    } else if (std::chrono::steady_clock::now() - stable_since >=
+               std::chrono::duration<double>(grasp_contact_stable_time_s_)) {
+      RCLCPP_INFO(get_logger(),
+                  "gripper contact stable at %.1fmm; ready to lift",
+                  *opening * 1000.0);
+      return true;
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+  }
+  if (has_feedback) {
+    RCLCPP_WARN(get_logger(),
+                "gripper contact wait timeout (%.1fs); proceed only if stable",
+                timeout_s);
+  }
+  return has_feedback ? false : true;
 }
 
 bool GraspExecutor::commandGripperGazeboForce(double force_n,
