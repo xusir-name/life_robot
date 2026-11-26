@@ -64,7 +64,6 @@ def generate_launch_description():
         DeclareLaunchArgument("min_width_m", default_value="0.005"),
         DeclareLaunchArgument("max_width_m", default_value="0.09"),
         DeclareLaunchArgument("preferred_width_m", default_value="0.04"),
-        DeclareLaunchArgument("grasp_depth_from_top_m", default_value="0.01"),
         DeclareLaunchArgument("nms_translation_m", default_value="0.02"),
         DeclareLaunchArgument("nms_rotation_rad", default_value="0.5236"),
         DeclareLaunchArgument("max_grasps", default_value="200"),
@@ -94,7 +93,7 @@ def generate_launch_description():
         DeclareLaunchArgument("grasp_height_offset_m", default_value="0.0"),
         DeclareLaunchArgument("pregrasp_distance_m", default_value="0.08"),
         DeclareLaunchArgument("retreat_distance_m", default_value="0.08"),
-        DeclareLaunchArgument("lift_height_m", default_value="0.05"),
+        DeclareLaunchArgument("lift_height_m", default_value="0.06"),
         DeclareLaunchArgument("gripper_open_m", default_value="0.08"),
         DeclareLaunchArgument("gripper_margin_m", default_value="0.004"),
         DeclareLaunchArgument("gripper_max_opening_m", default_value="0.095"),
@@ -106,7 +105,7 @@ def generate_launch_description():
         DeclareLaunchArgument("joint_states_topic", default_value="/joint_states"),
         DeclareLaunchArgument("gripper_control_mode", default_value="position"),
         DeclareLaunchArgument("gripper_close_squeeze_m", default_value="0.002"),
-        DeclareLaunchArgument("gripper_force_n", default_value="1.5"),
+        DeclareLaunchArgument("gripper_force_n", default_value="2.0"),
         DeclareLaunchArgument("gripper_force_joint", default_value="gripper"),
         DeclareLaunchArgument(
             "gripper_force_topic", default_value="/control/joint_states"
@@ -164,7 +163,6 @@ def generate_launch_description():
                 "min_width_m": _f("min_width_m"),
                 "max_width_m": _f("max_width_m"),
                 "preferred_width_m": _f("preferred_width_m"),
-                "grasp_depth_from_top_m": _f("grasp_depth_from_top_m"),
                 "nms_translation_m": _f("nms_translation_m"),
                 "nms_rotation_rad": _f("nms_rotation_rad"),
                 "max_grasps": _i("max_grasps"),

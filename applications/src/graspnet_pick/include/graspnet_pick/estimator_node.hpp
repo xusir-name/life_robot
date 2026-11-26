@@ -63,7 +63,6 @@ class GraspEstimator : public rclcpp::Node {
   double min_width_m_{0.005};
   double max_width_m_{0.09};
   double preferred_width_m_{0.04};
-  double grasp_depth_from_top_m_{0.01};
   double nms_translation_m_{0.02};
   double nms_rotation_rad_{0.5236};
   int max_grasps_{200};

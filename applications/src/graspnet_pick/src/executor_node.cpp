@@ -502,6 +502,30 @@ void GraspExecutor::execute(const ExecuteGrasp::Request &request,
     return;
   }
 
+  // 先纯竖直抬起，确认没有滑落，再沿抓取反方向后退。
+  Eigen::Matrix4d T_base_tcp_lift = *chosen_tcp;
+  T_base_tcp_lift(2, 3) += std::max(0.0, lift_height_m_);
+  const Eigen::Matrix4d T_base_ee_lift =
+      T_base_tcp_lift * invertTransform(T_ee_tcp_);
+  if (!moveTo(T_base_ee_lift, "lift", timeout)) {
+    fail(response, ExecuteGrasp::Response::ERROR_MOTION,
+         "lift motion failed; object may still be held");
+    return;
+  }
+  const auto lift_opening = gripperOpening();
+  if (lift_opening.has_value()) {
+    RCLCPP_INFO(get_logger(), "gripper opening after lift: %.1fmm",
+                *lift_opening * 1000.0);
+  }
+  if (lift_opening.has_value() && *lift_opening < min_grasp_opening_m_) {
+    std::ostringstream ss;
+    ss << "object slipped during lift (opening=" << *lift_opening * 1000.0
+       << "mm)";
+    commandGripperDispatch(open_width, "safe-open");
+    fail(response, ExecuteGrasp::Response::ERROR_GRIPPER, ss.str());
+    return;
+  }
+
   Eigen::Matrix4d T_base_tcp_retreat =
       *chosen_tcp *
       translationTransform(0.0, 0.0, -std::max(0.0, retreat_distance_m_));
@@ -837,17 +861,17 @@ std::vector<Eigen::Matrix3d> GraspExecutor::orientationCandidates(
     const Eigen::Matrix3d &R_grasp, const Eigen::Matrix3d &R_current) {
   std::vector<Eigen::Matrix3d> candidates;
 
-  // 优先“夹爪朝下”：先纯垂直，再向 +X 倾斜 15/30/45°，避免大夹爪水平
-  // 进入时顶到突台/桌面。每个倾角尝试当前偏航和候选偏航。
+  // 优先“夹爪朝下”：先纯垂直，再向 +X 倾斜 5/10/15/30/45°。
+  // 每个倾角先试物体 OBB 的闭合轴，再试当前腕部偏航。
   if (prefer_vertical_approach_) {
-    const std::vector<double> tilts_deg{0.0, 15.0, 30.0, 45.0};
+    const std::vector<double> tilts_deg{0.0, 5.0, 10.0, 15.0, 30.0, 45.0};
     const std::vector<Eigen::Vector3d> closings{
-        R_current.col(1), R_current.col(0), R_grasp.col(1),
+        R_grasp.col(1), R_current.col(1), R_current.col(0),
         Eigen::Vector3d(1.0, 0.0, 0.0), Eigen::Vector3d(0.0, 1.0, 0.0)};
     for (std::size_t ti = 0; ti < tilts_deg.size(); ++ti) {
       const double tilt = tilts_deg[ti] * M_PI / 180.0;
       const Eigen::Vector3d approach(std::sin(tilt), 0.0, -std::cos(tilt));
-      const std::size_t close_count = ti <= 1 ? 2U : 1U;
+      const std::size_t close_count = ti <= 3 ? 2U : 1U;
       for (std::size_t ci = 0; ci < close_count; ++ci) {
         auto R = rotationWithApproach(approach, closings[ci]);
         if (R.has_value()) {

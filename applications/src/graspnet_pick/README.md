@@ -19,8 +19,8 @@ RGB-D + 目标框 → 抓取候选（最高分） → GraspCandidate 话题
 
 - **一个框一个目标**：框由 YOLO/OBB/人工给出，本包不做检测；估计器只取
   “质心离框中心最近”的聚类，避免框内相邻物体被合并成一个候选。
-- **评分与执行对齐**：评分中垂直性权重 0.30，优先下压；垂直候选的抓取点
-  用框中心表面点沿桌面法向下探 `grasp_depth_from_top_m`，不再直接用可见点 OBB 中心。
+- **评分与执行对齐**：评分中垂直性权重 0.30，优先下压；抓取点仍用聚类 OBB 中心，
+  但执行端用恒力闭合 + 先竖直抬起，避免位置模式把物体挤飞。
 - **GraspNet 后端**：当前是 C++ 几何后端（平面去除 + 聚类 + 桌面约束 OBB + 力闭合候选），
   输出 GraspNet 风格的 6-DoF 抓取（`z=approach`、`y=闭合轴`、`x=y×z`）。
   官方 GraspNet 网络需要 `checkpoint-rs.tar` / `pointnet2_ops` / CUDA 工具链，
@@ -118,7 +118,7 @@ ros2 service call /grasp/execute interfaces/srv/ExecuteGrasp \
 ros2 launch graspnet_pick graspnet_pick.launch.py \
   use_sim_time:=true \
   gripper_control_mode:=gazebo_force \
-  gripper_force_n:=1.5
+  gripper_force_n:=2.0
 ```
 
 它会：
@@ -127,13 +127,13 @@ ros2 launch graspnet_pick graspnet_pick.launch.py \
 2. 通过 `/apply_joint_effort` 给 `gripper_joint1/2` 持续输出恒定力；
 3. 夹住后保持力，下一次开爪时 `/clear_joint_efforts` 清力并重新激活位置控制器。
 
-真机 AgileX 力控（夹持力 1.5N，不再用仿真位置控制器）：
+真机 AgileX 力控（夹持力 2.0N，不再用仿真位置控制器）：
 
 ```bash
 ros2 launch graspnet_pick graspnet_pick.launch.py \
   use_sim_time:=false \
   gripper_control_mode:=force \
-  gripper_force_n:=1.5
+  gripper_force_n:=2.0
 ```
 
 `force` 模式发布 `/control/joint_states`：`position=夹爪宽度`、`effort=夹持力(N)`。
@@ -158,10 +158,10 @@ ros2 launch graspnet_pick graspnet_pick.launch.py \
 | `extrinsics_yaml` | `~/life_robot/config/calibration/camera_tcp_extrinsics.yaml` | 手眼外参 |
 | `finger_length_m` | `0.0` | 机器人 TCP 到指腹的额外前伸；仿真 `/arm_tcp_state` 已在指根/接触中心，保持 0 |
 | `pregrasp_distance_m` / `retreat_distance_m` | `0.08` / `0.08` | 预抓取/后退 |
-| `lift_height_m` | `0.05` | 抬起叠加基座 +Z |
+| `lift_height_m` | `0.06` | 先纯竖直抬起的高度；抬完检查是否滑落 |
 | `gripper_control_mode` | `position` | `position`=仿真位置控制（软闭合）；`gazebo_force`=仿真恒定力；`force`=真机 AgileX 力控（`/control/joint_states.effort`） |
 | `gripper_close_squeeze_m` | `0.002` | 闭爪目标 = 检测宽度 - 该值；不再直接命令 0，减小挤爆/弹飞 |
-| `gripper_force_n` | `1.5` | `force` 模式夹持力，AgileX 允许 [0.5, 3.0] N |
+| `gripper_force_n` | `2.0` | `force`/`gazebo_force` 夹持力，AgileX 允许 [0.5, 3.0] N |
 | `gripper_force_joint` | `gripper` | 真机夹爪关节名（宽度） |
 | `gripper_force_topic` | `/control/joint_states` | 真机力控指令话题（`JointState.position=宽度, effort=力`） |
 | `gripper_effort_signs` | `-1.0,1.0` | 仿真恒定力两指方向；`gazebo_force` 用 |
@@ -174,7 +174,6 @@ ros2 launch graspnet_pick graspnet_pick.launch.py \
 | `gripper_settle_s` | `1.5` | 必须大于 `gripper_move_time_s`，否则会在夹爪未闭合时就读反馈 |
 | `min_grasp_opening_m` | `0.005` | 闭爪后小于此视为夹空 |
 | `prefer_vertical_approach` | `true` | 优先夹爪朝下：0/15/30/45° 下压，失败后才退回候选/水平侧抓 |
-| `grasp_depth_from_top_m` | `0.01` | 垂直抓取时，从框中心表面点沿桌面法向下探的深度 |
 | `grasp_height_offset_m` | `0.0` | 抓取点沿基座 +Z 的额外偏移；接触点偏低时向上调 |
 
 ## 安全与边界
@@ -188,10 +187,11 @@ ros2 launch graspnet_pick graspnet_pick.launch.py \
   使用 AgileX 驱动内置力控；这是当前真机联调的临时路径，正式运行应迁到 L6。
 - 真正的导纳控制需要力/力矩反馈和 L6 控制器；当前 `force` 模式是“力上限”控制，
   不是完整的六维导纳。
-- 规划失败会按“垂直 0° → 15° → 30° → 45°（当前/候选偏航）→ 候选朝向 →
-  当前腕姿 → 水平侧抓”顺序重试；优先夹爪朝下，避免大夹爪水平进入顶到突台。
+- 规划失败会按“垂直 0° → 5° → 10° → 15° → 30° → 45°（先候选闭合轴，再当前偏航）→
+  候选朝向 → 当前腕姿 → 水平侧抓”顺序重试；优先夹爪朝下，避免大夹爪水平进入顶到突台。
   全部失败时开爪并返回 `ERROR_MOTION`。
 - 闭爪后读 `/joint_states`，开口 < `min_grasp_opening_m` 判定夹空并开爪返回失败。
+- 抓取后先**纯竖直抬起** `lift_height_m`，抬起后再次检查开口；开口变小判定滑落并返回失败。
 - 服务阻塞期间用多线程执行器保证 TCP/状态回调继续运行；同一时间只允许一个抓取。
 - 没有碰撞场景注入、没有力控/滑移检测；真机前需接 L6 + 力矩/夹爪反馈。
 - **仿真接触状态**：已跑通框→候选→服务→运动→夹爪→夹空检测。仿真夹爪的接触/抓取点偏置
