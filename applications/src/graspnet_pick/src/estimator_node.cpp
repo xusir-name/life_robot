@@ -59,6 +59,8 @@ GraspEstimator::GraspEstimator(const rclcpp::NodeOptions &options)
   min_width_m_ = declare_parameter<double>("min_width_m", 0.005);
   max_width_m_ = declare_parameter<double>("max_width_m", 0.09);
   preferred_width_m_ = declare_parameter<double>("preferred_width_m", 0.04);
+  grasp_depth_from_top_m_ =
+      declare_parameter<double>("grasp_depth_from_top_m", 0.01);
   nms_translation_m_ = declare_parameter<double>("nms_translation_m", 0.02);
   nms_rotation_rad_ = declare_parameter<double>("nms_rotation_rad", 0.5236);
   max_grasps_ = declare_parameter<int>("max_grasps", 200);
@@ -315,6 +317,7 @@ void GraspEstimator::estimate(const cv::Rect &roi) {
   options.max_grasps = max_grasps_;
   options.up = up;
   options.preferred_point = preferred_point;
+  options.grasp_depth_from_top_m = grasp_depth_from_top_m_;
   const auto grasps = sampleGrasps(points, options);
   const auto best = selectBestGrasp(grasps, min_score_);
   if (!best.has_value()) {

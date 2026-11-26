@@ -19,6 +19,8 @@ RGB-D + 目标框 → 抓取候选（最高分） → GraspCandidate 话题
 
 - **一个框一个目标**：框由 YOLO/OBB/人工给出，本包不做检测；估计器只取
   “质心离框中心最近”的聚类，避免框内相邻物体被合并成一个候选。
+- **评分与执行对齐**：评分中垂直性权重 0.30，优先下压；垂直候选的抓取点
+  用框中心表面点沿桌面法向下探 `grasp_depth_from_top_m`，不再直接用可见点 OBB 中心。
 - **GraspNet 后端**：当前是 C++ 几何后端（平面去除 + 聚类 + 桌面约束 OBB + 力闭合候选），
   输出 GraspNet 风格的 6-DoF 抓取（`z=approach`、`y=闭合轴`、`x=y×z`）。
   官方 GraspNet 网络需要 `checkpoint-rs.tar` / `pointnet2_ops` / CUDA 工具链，
@@ -172,6 +174,7 @@ ros2 launch graspnet_pick graspnet_pick.launch.py \
 | `gripper_settle_s` | `1.5` | 必须大于 `gripper_move_time_s`，否则会在夹爪未闭合时就读反馈 |
 | `min_grasp_opening_m` | `0.005` | 闭爪后小于此视为夹空 |
 | `prefer_vertical_approach` | `true` | 优先夹爪朝下：0/15/30/45° 下压，失败后才退回候选/水平侧抓 |
+| `grasp_depth_from_top_m` | `0.01` | 垂直抓取时，从框中心表面点沿桌面法向下探的深度 |
 | `grasp_height_offset_m` | `0.0` | 抓取点沿基座 +Z 的额外偏移；接触点偏低时向上调 |
 
 ## 安全与边界

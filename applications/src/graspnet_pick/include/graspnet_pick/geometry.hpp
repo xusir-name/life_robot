@@ -44,6 +44,8 @@ struct GraspSamplingOptions {
   std::optional<Eigen::Vector3d> up;
   // 若给出，只处理质心离该点最近的聚类（一个框一个目标）。
   std::optional<Eigen::Vector3d> preferred_point;
+  // 垂直/近垂直抓取时，从框中心表面点沿 up 方向下探的深度。
+  double grasp_depth_from_top_m{0.01};
 };
 
 PointCloud depthToPoints(const cv::Mat &depth, const Eigen::Matrix3d &K,

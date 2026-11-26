@@ -616,9 +616,19 @@ std::vector<Grasp> sampleGrasps(const std::vector<Eigen::Vector3d> &points,
         const double approach_score = std::max(0.0, a.dot(to_object));
         const double vertical_score =
             up_local.has_value() ? std::max(0.0, a.dot(-*up_local)) : 0.0;
-        const double score = 0.55 * width_score + 0.35 * approach_score +
-                             0.10 * vertical_score;
-        auto grasp = makeGrasp(a, axes.col(close_index), center, width, score, label);
+        // 执行端优先垂直下压，这里也把垂直性作为主项，避免选出
+        // “相机射线朝向”但与实际下压执行不匹配的候选。
+        const double score = 0.50 * width_score + 0.20 * approach_score +
+                             0.30 * vertical_score;
+        Eigen::Vector3d position = center;
+        if (up_local.has_value() && vertical_score > 0.9 &&
+            options.preferred_point.has_value()) {
+          // 用框中心表面点作为 x/y/z，再沿桌面法向下探一点，避免
+          // 可见点 OBB 中心被抬高导致夹爪在物体上方空夹。
+          position = *options.preferred_point -
+                     (*up_local) * std::max(0.0, options.grasp_depth_from_top_m);
+        }
+        auto grasp = makeGrasp(a, axes.col(close_index), position, width, score, label);
         if (grasp.has_value()) {
           candidates.push_back(*grasp);
         }
